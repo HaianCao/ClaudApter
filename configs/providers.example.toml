@@ -1,0 +1,14 @@
+# ClaudApter user config example. Do not put API keys in this file.
+schema_version = 1
+
+[defaults]
+provider = "example"
+model = "claude-model-id"
+effort = "default"
+
+[[providers]]
+id = "example"
+display_name = "Example Gateway"
+base_url = "https://gateway.example.com"
+auth_mode = "bearer" # bearer or api_key
+default_model = "claude-model-id"

@@ -1,0 +1,35 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install and test
+        run: |
+          python -m pip install -e ".[test]" build
+          python -m pytest -q
+          python -m build --wheel
+          python -c "import glob, zipfile; wheel=glob.glob('dist/*.whl')[0]; names=set(zipfile.ZipFile(wheel).namelist()); expected={'claudapter/web_template.html','claudapter/assets/ClaudApter_black.png','claudapter/assets/ClaudApter_white.png','claudapter/assets/ClaudApter_black_icon.png','claudapter/assets/ClaudApter_white_icon.png'}; missing=expected-names; assert not missing, f'Missing package files: {missing}'"
+      - name: Check PowerShell syntax
+        shell: pwsh
+        run: |
+          foreach ($file in @('scripts/install.ps1', 'scripts/uninstall.ps1')) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) { throw "$file has PowerShell parse errors: $errors" }
+          }
+      - name: Smoke-test Windows install and uninstall
+        shell: pwsh
+        run: |
+          & .\scripts\install.ps1 -SkipClaudeInstall -NonInteractive
+          $launcher = Join-Path $env:LOCALAPPDATA 'Programs\claudapter\venv\Scripts\claude-ca.exe'
+          if (-not (Test-Path -LiteralPath $launcher)) { throw 'claude-ca.exe was not installed' }
+          & $launcher --help
+          if ($LASTEXITCODE -ne 0) { throw 'claude-ca --help failed' }
+          & .\scripts\uninstall.ps1 -NonInteractive
+          if (Test-Path -LiteralPath $launcher) { throw 'claude-ca.exe was not removed' }
