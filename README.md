@@ -62,6 +62,12 @@ When you choose **Run Claude Code**, the setup page stops and Claude Code takes 
 
 Add `-WithGateway` to the installer command to include the pinned Protoverta component, then select **Local Protoverta gateway** as the connection mode. Native Messages preserves beta headers and thinking/signature payloads. Chat and Responses translation supports text and client-side function tools, including streaming and multiple tool calls.
 
+The gateway preview is on `integration/protoverta`, not stable `main`:
+
+```powershell
+& ([scriptblock]::Create((irm "https://raw.githubusercontent.com/HaianCao/ClaudApter/integration/protoverta/scripts/install.ps1"))) -WithGateway -SourceBranch integration/protoverta
+```
+
 Translated sessions disable thinking and unsupported experimental capabilities in the child process only. Cache hints and telemetry are omitted, and tool errors become labelled text. Initial token usage is provisional and corrected at completion using real upstream counts. Effort supports default/low/medium/high; hidden reasoning replay, multimodal content, hosted tools and compaction are not supported. Use native Messages for those features. Existing sessions containing unsupported blocks cannot be resumed through translation.
 
 ## Use ClaudApter
@@ -110,6 +116,8 @@ python -m pytest
 ```
 
 To test an unpublished gateway build, pass `-ProtovertaWheel PATH_TO_WHEEL` to the local installer. This enables the gateway extra and checks its pinned package version without copying Protoverta source into this project.
+
+Installer smoke tests can pass `-NoPathChanges` to install and uninstall scripts. Redirect `APPDATA` and `LOCALAPPDATA` in a disposable child shell as well: the flag alone does not isolate installation or user data paths.
 
 ## License
 

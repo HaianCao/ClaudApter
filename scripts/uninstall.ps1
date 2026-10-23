@@ -1,4 +1,4 @@
-param([switch]$DeleteData, [switch]$NonInteractive)
+param([switch]$DeleteData, [switch]$NonInteractive, [switch]$NoPathChanges)
 $ErrorActionPreference = 'Stop'
 $installRoot = Join-Path $env:LOCALAPPDATA 'Programs\claudapter'
 $scripts = Join-Path $installRoot 'venv\Scripts'
@@ -13,10 +13,12 @@ if (Test-Path -LiteralPath $installRoot) {
     if ((Get-Item -LiteralPath $installRoot -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Refusing to remove a linked installation directory.' }
     Remove-Item -LiteralPath $installRoot -Recurse -Force
 }
+if (-not $NoPathChanges) {
 $current = [Environment]::GetEnvironmentVariable('Path', 'User')
 $kept = @($current -split ';' | Where-Object { $_ -and $_.TrimEnd('\') -ine $scripts.TrimEnd('\') })
 [Environment]::SetEnvironmentVariable('Path', ($kept -join ';'), 'User')
 $env:Path = (@($env:Path -split ';' | Where-Object { $_ -and $_.TrimEnd('\') -ine $scripts.TrimEnd('\') }) -join ';')
+}
 if ($DeleteData) {
     if ((Read-Host 'Permanently delete ClaudApter config, API keys and cache? Type DELETE') -ceq 'DELETE') {
         foreach ($target in @($dataRoot, $cacheRoot)) {
