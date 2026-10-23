@@ -125,7 +125,7 @@ try {
         }
         $installTarget = "${repoRoot}[gateway]"
         if (-not $ProtovertaWheel) {
-            $gatewayPackages += 'https://github.com/HaianCao/Protoverta/releases/download/v0.3.0a5/protoverta-0.3.0a5-py3-none-any.whl'
+            $gatewayPackages += 'https://github.com/HaianCao/Protoverta/releases/download/v0.3.0a6/protoverta-0.3.0a6-py3-none-any.whl'
         }
     }
     & $venvPython -m pip install --disable-pip-version-check --force-reinstall $installTarget @gatewayPackages
