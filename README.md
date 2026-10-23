@@ -27,7 +27,7 @@ ClaudApter is a lightweight launcher and configuration studio for the official C
 - Launch Claude Code in the current terminal, or select a different provider/model for one run.
 - Keep API keys local and separate from the provider configuration file.
 
-Providers must support the Anthropic Messages API (`/v1/messages`). Model discovery through `GET /v1/models` is optional; you can enter model IDs yourself when a provider does not offer it. ClaudApter does not translate OpenAI Responses or Chat Completions requests into Anthropic Messages. A model appearing in a catalog does not guarantee it will work with Claude Code; [Anthropic does not support routing Claude Code to non-Claude models through third-party gateways](https://code.claude.com/docs/en/llm-gateway).
+Connect native Anthropic Messages providers directly, or translate Chat Completions and Responses providers through the optional local Protoverta gateway. Model discovery is optional; you can enter model IDs yourself when a provider does not offer it. A catalog entry does not guarantee Claude Code compatibility; [Anthropic does not support routing Claude Code to non-Claude models through third-party gateways](https://code.claude.com/docs/en/llm-gateway).
 
 ## Quick start
 
@@ -51,12 +51,18 @@ The setup page opens in your browser. Add a provider, enter its API key, refresh
 
 In the setup page:
 
-1. Select **Add** and enter a provider ID, display name, and gateway base URL. For example, `https://gateway.example.com` leads Claude Code to `https://gateway.example.com/v1/messages`.
+1. Select **Add**, enter a provider ID and display name, and choose the upstream protocol. For Messages, `https://gateway.example.com` leads to `/v1/messages`. For Chat or Responses, enter the exact API prefix, such as `https://gateway.example.com/v1` or `/api/v4`, without the endpoint suffix; gateway mode is required.
 2. Choose **Bearer token** for `Authorization: Bearer ...` or **API key** for `x-api-key`, then enter your key.
 3. Select **Refresh models** to query the provider's model catalog, or type a model ID directly.
 4. Choose an effort level and select **Save as default** or **Run Claude Code**.
 
-When you choose **Run Claude Code**, the setup page stops and Claude Code takes over the terminal where you launched `claude-ca setup`. The key is passed to Claude Code through the process environment.
+When you choose **Run Claude Code**, the setup page stops and Claude Code takes over the terminal where you launched `claude-ca setup`. Direct mode passes the provider key through the child environment; gateway mode keeps it in the local gateway and gives Claude Code a temporary local credential.
+
+### Optional local gateway
+
+Add `-WithGateway` to the installer command to include the pinned Protoverta component, then select **Local Protoverta gateway** as the connection mode. Native Messages preserves beta headers and thinking/signature payloads. Chat and Responses translation supports text and client-side function tools, including streaming and multiple tool calls.
+
+Translated sessions disable thinking and unsupported experimental capabilities in the child process only. Cache hints and telemetry are omitted, and tool errors become labelled text. Initial token usage is provisional and corrected at completion using real upstream counts. Effort supports default/low/medium/high; hidden reasoning replay, multimodal content, hosted tools and compaction are not supported. Use native Messages for those features. Existing sessions containing unsupported blocks cannot be resumed through translation.
 
 ## Use ClaudApter
 
@@ -88,7 +94,9 @@ It removes the ClaudApter launcher and its PATH entry while keeping provider set
 
 ## Privacy and security
 
-Provider settings and API keys are stored on your computer. API keys are kept in a local `.env` file in plain text, so protect the file and never commit or share it. The setup page listens only on your own computer (`127.0.0.1`) and uses a per-session access token. ClaudApter is a local launcher; it does not host a service or proxy your conversations.
+Provider settings and API keys are stored on your computer. API keys are kept in a local `.env` file in plain text, so protect the file and never commit or share it. The setup page listens only on your own computer (`127.0.0.1`) and uses a per-session access token. Direct mode does not proxy conversations; optional gateway mode starts a temporary loopback Protoverta server and stops it when Claude Code exits.
+
+Gateway mode is experimental. Client interoperability is tested with scripted local upstreams; each real provider/model still needs its own compatibility check. Gateway mode passes a temporary local credential to Claude Code and keeps the provider key in the launcher.
 
 ClaudApter does not edit Claude Code's own settings or session transcripts. The `doctor` command sends a small real `/v1/messages` request and may incur an API charge; it does not verify streaming or tool calls. Resuming with a different provider/model can be attempted, but equivalent reasoning state or tool behavior is not guaranteed.
 
@@ -100,6 +108,8 @@ If Claude Code's `/status` shows a different gateway or credential from the one 
 python -m pip install -e ".[test]"
 python -m pytest
 ```
+
+To test an unpublished gateway build, pass `-ProtovertaWheel PATH_TO_WHEEL` to the local installer. This enables the gateway extra and checks its pinned package version without copying Protoverta source into this project.
 
 ## License
 

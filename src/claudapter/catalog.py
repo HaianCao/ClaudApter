@@ -14,6 +14,8 @@ from .errors import ClaudapterError
 
 
 def _url(provider: Provider, suffix: str) -> str:
+    if provider.protocol != "messages" and suffix.startswith("/v1/"):
+        suffix = suffix[3:]
     return provider.base_url.rstrip("/") + suffix
 
 
@@ -21,7 +23,9 @@ def _headers(config: Config, provider: Provider) -> dict[str, str]:
     token = get_token(config, provider.id)
     if not token:
         raise ClaudapterError(f"No API key is saved for {provider.display_name}.")
-    headers = {"anthropic-version": "2023-06-01", "accept": "application/json"}
+    headers = {"accept": "application/json"}
+    if provider.protocol == "messages":
+        headers["anthropic-version"] = "2023-06-01"
     headers["Authorization" if provider.auth_mode == "bearer" else "x-api-key"] = f"Bearer {token}" if provider.auth_mode == "bearer" else token
     return headers
 
@@ -61,17 +65,17 @@ def fetch_models(config: Config, provider: Provider) -> list[dict[str, str]]:
     models: dict[str, dict[str, str]] = {}
     cursor = ""
     for _ in range(100):
-        query = {"limit": "1000"}
+        query = {"limit": "1000"} if provider.protocol == "messages" else {}
         if cursor:
             query["after_id"] = cursor
-        request = urllib.request.Request(_url(provider, "/v1/models") + "?" + urllib.parse.urlencode(query), headers=_headers(config, provider))
+        request = urllib.request.Request(_url(provider, "/v1/models") + ("?" + urllib.parse.urlencode(query) if query else ""), headers=_headers(config, provider))
         data = request_json(request)
         entries = data.get("data")
         if not isinstance(entries, list):
             raise ClaudapterError("Provider model catalog has no data array.")
         for entry in entries:
             if isinstance(entry, dict) and isinstance(entry.get("id"), str) and entry["id"]:
-                name = entry.get("display_name")
+                name = entry.get("display_name") or entry.get("name")
                 models[entry["id"]] = {"id": entry["id"], "display_name": name if isinstance(name, str) and name else entry["id"]}
         if not data.get("has_more"):
             break
@@ -88,7 +92,7 @@ def fetch_models(config: Config, provider: Provider) -> list[dict[str, str]]:
         existing = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
         if not isinstance(existing, dict):
             existing = {}
-        existing[provider.id] = {"base_url": provider.base_url, "saved_at": time.time(), "models": result}
+        existing[provider.id] = {"base_url": provider.base_url, "protocol": provider.protocol, "saved_at": time.time(), "models": result}
         temporary = None
         try:
             with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, prefix=".models-", suffix=".tmp", delete=False) as stream:
@@ -107,7 +111,7 @@ def cached_models(config: Config, provider: Provider) -> tuple[list[dict[str, st
     try:
         data = json.loads(cache_path(config).read_text(encoding="utf-8"))
         entry = data.get(provider.id, {})
-        if entry.get("base_url") != provider.base_url or not isinstance(entry.get("models"), list):
+        if entry.get("base_url") != provider.base_url or entry.get("protocol", "messages") != provider.protocol or not isinstance(entry.get("models"), list):
             return [], True
         if any(not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"] or not isinstance(item.get("display_name"), str) for item in entry["models"]):
             return [], True

@@ -69,7 +69,7 @@ class WebTests(unittest.TestCase):
                 launched_on.append(threading.get_ident())
                 return 0
 
-            with patch("claudapter.web.webbrowser.open", side_effect=opened.put), patch("claudapter.web.build_invocation", return_value=(["claude"], {})), patch("claudapter.web.launch", side_effect=fake_launch):
+            with patch("claudapter.web.webbrowser.open", side_effect=opened.put), patch("claudapter.web.preflight", return_value=None), patch("claudapter.web.launch", side_effect=fake_launch):
                 worker = threading.Thread(target=lambda: result.setdefault("code", serve(config)))
                 worker.start()
                 url = opened.get(timeout=5)

@@ -1,4 +1,4 @@
-param([switch]$SkipClaudeInstall, [switch]$NonInteractive)
+param([switch]$SkipClaudeInstall, [switch]$NonInteractive, [switch]$WithGateway, [string]$ProtovertaWheel)
 $ErrorActionPreference = 'Stop'
 $sourceTempRoot = $null
 
@@ -101,7 +101,27 @@ try {
         & $pythonExe -m venv $venv
         if ($LASTEXITCODE -ne 0) { throw 'Could not create the ClaudApter Python environment.' }
     }
-    & $venvPython -m pip install --disable-pip-version-check --force-reinstall $repoRoot
+    $installTarget = $repoRoot
+    $gatewayPackages = @()
+    if (-not $WithGateway -and -not $ProtovertaWheel) {
+        $hasGateway = & $venvPython -c "import importlib.util; print(int(importlib.util.find_spec('protoverta') is not None))"
+        if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the existing gateway installation.' }
+        if (([string]$hasGateway).Trim() -eq '1') { $WithGateway = $true }
+    }
+    if ($ProtovertaWheel) {
+        if (-not (Test-Path -LiteralPath $ProtovertaWheel -PathType Leaf) -or [IO.Path]::GetExtension($ProtovertaWheel) -ne '.whl') {
+            throw 'ProtovertaWheel must point to a local Protoverta wheel file.'
+        }
+        $gatewayPackages += (Resolve-Path -LiteralPath $ProtovertaWheel).Path
+        $WithGateway = $true
+    }
+    if ($WithGateway) {
+        $installTarget = "${repoRoot}[gateway]"
+        if (-not $ProtovertaWheel) {
+            $gatewayPackages += 'https://github.com/HaianCao/Protoverta/releases/download/v0.3.0a1/protoverta-0.3.0a1-py3-none-any.whl'
+        }
+    }
+    & $venvPython -m pip install --disable-pip-version-check --force-reinstall $installTarget @gatewayPackages
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $commandPath)) { throw 'ClaudApter package installation failed.' }
     Add-UserPath (Join-Path $venv 'Scripts')
 

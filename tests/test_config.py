@@ -29,6 +29,13 @@ class ConfigTests(unittest.TestCase):
     def test_secret_name(self):
         self.assertEqual(secret_var("agent-router"), "AGENT_ROUTER_TOKEN")
 
+    def test_gateway_choice_survives_config_round_trip(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.toml"
+            config = Config({"demo": Provider("demo", "Demo", "https://example.test", execution_mode="gateway")}, path=path)
+            save(config)
+            self.assertEqual(load(path).providers["demo"].execution_mode, "gateway")
+
     def test_secret_name_collisions_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Config({

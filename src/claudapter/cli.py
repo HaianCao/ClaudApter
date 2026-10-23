@@ -66,6 +66,8 @@ def main(argv: list[str] | None = None) -> int:
     except ClaudapterError as exc:
         print(f"claude-ca: {exc}", file=sys.stderr)
         return 1
+    except KeyboardInterrupt:
+        return 130
 
 
 if __name__ == "__main__":

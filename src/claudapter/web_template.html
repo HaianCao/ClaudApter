@@ -38,8 +38,10 @@
             <label class="field"><span class="field-label">Provider ID</span><input class="input" id="id" required pattern="[a-z0-9][a-z0-9_-]*" placeholder="my_gateway" autocomplete="off"><span class="hint">Lowercase, no spaces. Use _ or - between words.</span></label>
             <label class="field"><span class="field-label">Display name</span><input class="input" id="displayName" required placeholder="My Gateway" autocomplete="off"></label>
           </div>
-          <label class="field"><span class="field-label">Gateway base URL</span><input class="input" id="baseUrl" type="url" required placeholder="https://gateway.example.com" autocomplete="url"><span class="hint">Enter the URL before /v1. Claude Code requests /v1/messages.</span></label>
+          <label class="field"><span class="field-label">Upstream protocol</span><select id="protocol"><option value="messages">Anthropic Messages</option><option value="chat">Chat Completions</option><option value="responses">Responses</option></select></label>
+          <label class="field"><span class="field-label">Provider base URL</span><input class="input" id="baseUrl" type="url" required placeholder="https://gateway.example.com" autocomplete="url"><span class="hint" id="baseHint">Messages: enter the URL before /v1. Other protocols: include the API prefix (for example /v1), without /responses or /chat/completions.</span></label>
           <label class="field"><span class="field-label">Authentication</span><select id="authMode"><option value="bearer">Bearer token (Authorization header)</option><option value="api_key">API key (x-api-key header)</option></select></label>
+          <label class="field"><span class="field-label">Connection mode</span><select id="executionMode"><option value="direct">Direct Messages endpoint</option><option value="gateway">Local Protoverta gateway</option></select><span class="hint">Chat/Responses require Protoverta. Translation supports text and function tools with thinking disabled. Initial usage is provisional and corrected at completion.</span></label>
           <label class="field"><span class="field-label">API key or token <span>Optional when editing</span></span><input class="input" id="apiKey" type="password" autocomplete="new-password" placeholder="Paste API key"></label>
           <div class="actions"><button class="btn primary" type="submit">Save provider</button><button class="btn" type="button" id="cancel">Cancel</button></div>
         </form>
@@ -71,7 +73,9 @@
     const p=selected();fetchGeneration++;$('providerForm').classList.add('hidden');$('apiKey').value='';const meta=$('providerMeta');meta.replaceChildren();
     $('provider').disabled=!state.providers.length;
     for(const id of ['edit','delete','model','effort','save','run','refresh'])$(id).disabled=!p;
-    if(p){for(const value of [p.id,p.base_url,p.auth_mode==='bearer'?'Bearer token':'API key',p.has_key?'Key saved':'Key missing']){const badge=document.createElement('span');badge.className='badge';badge.textContent=value;meta.append(badge)}}
+    for(const option of $('effort').options)option.disabled=!!p&&p.protocol!=='messages'&&!['default','low','medium','high'].includes(option.value);
+    if($('effort').selectedOptions[0]?.disabled)$('effort').value='default';
+    if(p){for(const value of [p.id,p.base_url,p.protocol||'messages',p.auth_mode==='bearer'?'Bearer token':'API key',p.execution_mode==='gateway'?'Protoverta gateway':'Direct',p.has_key?'Key saved':'Key missing']){const badge=document.createElement('span');badge.className='badge';badge.textContent=value;meta.append(badge)}}
     $('model').value=p?(state.defaults.provider===p.id?state.defaults.model:(p.default_model||'')):'';
     catalog=[];renderResults();if(!p)return;
     const generation=fetchGeneration;
@@ -85,8 +89,10 @@
     $('catalogHint').textContent=`${matches.length} matching model${matches.length===1?'':'s'}. Manual model IDs are supported.`;
   }
   async function refresh(){const p=selected();if(!p)return;const generation=++fetchGeneration;const button=$('refresh');button.disabled=true;button.textContent='Loading…';try{const data=await api('/api/models/refresh','POST',{provider:p.id});if(generation!==fetchGeneration)return;catalog=data.models||[];renderResults();notify(`Loaded ${catalog.length} models.`)}catch(error){if(generation!==fetchGeneration)return;renderResults();notify(`${error.message} Cached models, if available, and manual entry remain usable.`,true)}finally{button.textContent='↻ Refresh models';button.disabled=!selected()}}
-  function formData(){return{id:$('id').value.trim(),display_name:$('displayName').value.trim(),base_url:$('baseUrl').value.trim(),auth_mode:$('authMode').value,api_key:$('apiKey').value}}
-  function edit(p){$('editorTitle').textContent=p?'Edit provider':'Add provider';$('id').value=p?.id||'';$('id').readOnly=!!p;$('displayName').value=p?.display_name||'';$('baseUrl').value=p?.base_url||'';$('authMode').value=p?.auth_mode||'bearer';$('apiKey').value='';$('providerForm').classList.remove('hidden');(p?$('displayName'):$('id')).focus()}
+  function protocolChanged(){const cross=$('protocol').value!=='messages';if(cross)$('executionMode').value='gateway';$('executionMode').disabled=cross}
+  function formData(){return{id:$('id').value.trim(),display_name:$('displayName').value.trim(),base_url:$('baseUrl').value.trim(),protocol:$('protocol').value,auth_mode:$('authMode').value,execution_mode:$('executionMode').value,api_key:$('apiKey').value}}
+  function edit(p){$('editorTitle').textContent=p?'Edit provider':'Add provider';$('id').value=p?.id||'';$('id').readOnly=!!p;$('displayName').value=p?.display_name||'';$('baseUrl').value=p?.base_url||'';$('authMode').value=p?.auth_mode||'bearer';$('protocol').value=p?.protocol||'messages';$('executionMode').value=p?.execution_mode||'direct';protocolChanged();$('apiKey').value='';$('providerForm').classList.remove('hidden');(p?$('displayName'):$('id')).focus()}
+  $('protocol').onchange=protocolChanged;
   function cancelEdit(){$('providerForm').classList.add('hidden');$('apiKey').value=''}
   function applyTheme(theme){const light=theme==='light';document.documentElement.dataset.theme=light?'light':'dark';$('brandLogo').src=`/assets/ClaudApter_${light?'white':'black'}.png`;$('favicon').href=`/assets/ClaudApter_${light?'white':'black'}_icon.png`;$('themeToggle').setAttribute('aria-pressed',String(light));$('themeLabel').textContent=light?'Dark mode':'Light mode';$('themeGlyph').textContent=light?'☾':'☀';document.querySelector('meta[name="theme-color"]').content=light?'#f8f6f3':'#090b10';try{localStorage.setItem('claudapter-theme',light?'light':'dark')}catch{}}
   let initialTheme='dark';try{initialTheme=localStorage.getItem('claudapter-theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark')}catch{}applyTheme(initialTheme);

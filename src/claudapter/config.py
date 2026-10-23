@@ -19,6 +19,8 @@ class Provider:
     base_url: str
     auth_mode: str = "bearer"
     default_model: str = ""
+    execution_mode: str = "direct"
+    protocol: str = "messages"
 
 
 @dataclass
@@ -61,7 +63,7 @@ def secret_var(provider_id: str) -> str:
     return re.sub(r"[^A-Za-z0-9]", "_", validate_provider_id(provider_id)).upper() + "_TOKEN"
 
 
-def validate_base_url(value: str) -> str:
+def validate_base_url(value: str, protocol: str = "messages") -> str:
     value = value.strip().rstrip("/")
     try:
         parsed = urlsplit(value)
@@ -69,9 +71,12 @@ def validate_base_url(value: str) -> str:
         port = parsed.port
     except ValueError as exc:
         raise ClaudapterError("Base URL has an invalid host or port.") from exc
-    if re.search(r"\s", value) or parsed.scheme != "https" or not hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or (port is not None and port < 1):
-        raise ClaudapterError("Base URL must be an HTTPS origin or gateway prefix without credentials, query or fragment.")
-    if parsed.path.endswith("/v1") or parsed.path.endswith("/v1/messages"):
+    local_http = parsed.scheme == "http" and hostname in {"127.0.0.1", "localhost", "::1"}
+    if re.search(r"\s", value) or (parsed.scheme != "https" and not local_http) or not hostname or parsed.username is not None or parsed.password is not None or parsed.query or parsed.fragment or (port is not None and port < 1):
+        raise ClaudapterError("Base URL must use HTTPS (or loopback HTTP) without credentials, query or fragment.")
+    if parsed.path.endswith(("/messages", "/responses", "/chat/completions")):
+        raise ClaudapterError("Enter the base URL without the endpoint suffix.")
+    if protocol == "messages" and parsed.path.endswith("/v1"):
         raise ClaudapterError("Enter the gateway base URL before /v1; Claude Code appends /v1/messages itself.")
     return value
 
@@ -84,9 +89,15 @@ def validate(config: Config) -> None:
         validate_provider_id(provider_id)
         if provider.id != provider_id or not provider.display_name.strip():
             raise ClaudapterError(f"Invalid provider: {provider_id}")
-        validate_base_url(provider.base_url)
+        if provider.protocol not in {"messages", "chat", "responses"}:
+            raise ClaudapterError(f"Invalid protocol for {provider_id}.")
+        validate_base_url(provider.base_url, provider.protocol)
         if provider.auth_mode not in {"bearer", "api_key"}:
             raise ClaudapterError(f"Invalid auth mode for {provider_id}.")
+        if provider.execution_mode not in {"direct", "gateway"}:
+            raise ClaudapterError(f"Invalid execution mode for {provider_id}.")
+        if provider.protocol != "messages" and provider.execution_mode != "gateway":
+            raise ClaudapterError("Chat and Responses providers require local Protoverta gateway mode.")
         name = secret_var(provider_id)
         if name in used_secret_names:
             raise ClaudapterError(f"Provider IDs collide on the same secret name: {name}.")
@@ -123,7 +134,7 @@ def save(config: Config) -> None:
     lines = ["schema_version = 1", "", "[defaults]", f"provider = {json.dumps(config.default_provider)}", f"model = {json.dumps(config.default_model)}", f"effort = {json.dumps(config.default_effort)}"]
     for provider in config.providers.values():
         lines += ["", "[[providers]]"]
-        for name in ("id", "display_name", "base_url", "auth_mode", "default_model"):
+        for name in ("id", "display_name", "base_url", "auth_mode", "default_model", "execution_mode", "protocol"):
             lines.append(f"{name} = {json.dumps(getattr(provider, name), ensure_ascii=False)}")
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None

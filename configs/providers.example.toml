@@ -12,3 +12,14 @@ display_name = "Example Gateway"
 base_url = "https://gateway.example.com"
 auth_mode = "bearer" # bearer or api_key
 default_model = "claude-model-id"
+protocol = "messages" # messages, chat or responses; non-Messages requires gateway
+execution_mode = "direct" # direct or gateway
+
+# A translated provider uses the exact API prefix, including its version.
+# [[providers]]
+# id = "chat_provider"
+# display_name = "Chat Provider"
+# base_url = "https://provider.example/v1"
+# protocol = "chat"
+# execution_mode = "gateway"
+# auth_mode = "bearer"

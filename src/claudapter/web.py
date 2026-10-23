@@ -14,7 +14,7 @@ from .catalog import cached_models, fetch_models
 from .config import Config, EFFORTS, Provider, save, secret_var, validate, validate_base_url, validate_provider_id
 from .credentials import _read, env_path, get_token, remove_token, store_token
 from .errors import ClaudapterError
-from .launcher import build_invocation, launch
+from .launcher import launch, preflight
 
 
 _HTML = Path(__file__).with_name("web_template.html").read_text(encoding="utf-8")
@@ -22,7 +22,7 @@ _HTML = Path(__file__).with_name("web_template.html").read_text(encoding="utf-8"
 
 def public_config(config: Config) -> dict:
     return {
-        "providers": [{"id": p.id, "display_name": p.display_name, "base_url": p.base_url, "auth_mode": p.auth_mode, "default_model": p.default_model, "has_key": bool(get_token(config, p.id))} for p in config.providers.values()],
+        "providers": [{"id": p.id, "display_name": p.display_name, "base_url": p.base_url, "auth_mode": p.auth_mode, "default_model": p.default_model, "execution_mode": p.execution_mode, "protocol": p.protocol, "has_key": bool(get_token(config, p.id))} for p in config.providers.values()],
         "defaults": {"provider": config.default_provider, "model": config.default_model, "effort": config.default_effort},
     }
 
@@ -180,7 +180,9 @@ def serve(config: Config) -> int:
                         raise ClaudapterError("Choose Bearer token or API key authentication.")
                     old_provider = config.providers.get(provider_id)
                     default_model = str(body.get("default_model", "")).strip() or (old_provider.default_model if old_provider else "")
-                    provider = Provider(provider_id, display_name, validate_base_url(str(body.get("base_url", ""))), mode, default_model)
+                    execution_mode = str(body.get("execution_mode", old_provider.execution_mode if old_provider else "direct"))
+                    protocol = str(body.get("protocol", old_provider.protocol if old_provider else "messages"))
+                    provider = Provider(provider_id, display_name, validate_base_url(str(body.get("base_url", "")), protocol), mode, default_model, execution_mode, protocol)
                     updated = copy.deepcopy(config)
                     updated.providers[provider_id] = provider
                     persist_provider_change(config, updated, provider_id, str(body["api_key"]) if body.get("api_key") else None)
@@ -202,7 +204,7 @@ def serve(config: Config) -> int:
                     provider = self._provider(str(body.get("provider", "")))
                     model = str(body.get("model", "")).strip()
                     effort = str(body.get("effort", "default"))
-                    build_invocation(config, provider, model, effort, [])
+                    preflight(config, provider, model, effort)
                     updated = copy.deepcopy(config)
                     updated.default_provider, updated.default_model, updated.default_effort = provider.id, model, effort
                     save(updated)

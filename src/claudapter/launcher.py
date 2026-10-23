@@ -1,15 +1,25 @@
 from __future__ import annotations
 
 import os
+import secrets
 import shutil
 import subprocess
 
-from .config import Config, EFFORTS, Provider
+from .config import Config, EFFORTS, Provider, secret_var
 from .credentials import get_token
 from .errors import ClaudapterError
 
 
-def build_invocation(config: Config, provider: Provider, model: str, effort: str, extra: list[str], mode: str = "run") -> tuple[list[str], dict[str, str]]:
+def build_invocation(config: Config, provider: Provider, model: str, effort: str, extra: list[str], mode: str = "run", *, gateway_url: str | None = None, gateway_token: str | None = None) -> tuple[list[str], dict[str, str]]:
+    if provider.execution_mode not in {"direct", "gateway"}:
+        raise ClaudapterError("Unsupported execution mode.")
+    if provider.protocol not in {"messages", "chat", "responses"}:
+        raise ClaudapterError("Unsupported provider protocol.")
+    cross_protocol = provider.protocol != "messages"
+    if cross_protocol and provider.execution_mode != "gateway":
+        raise ClaudapterError("Chat and Responses providers require gateway mode.")
+    if cross_protocol and effort not in {"default", "low", "medium", "high"}:
+        raise ClaudapterError("Cross-protocol gateway supports default, low, medium and high effort only.")
     executable = shutil.which("claude")
     if not executable:
         raise ClaudapterError("Claude Code CLI was not found on PATH. Install it and verify with: claude --version")
@@ -23,9 +33,22 @@ def build_invocation(config: Config, provider: Provider, model: str, effort: str
     env = os.environ.copy()
     for name in ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_CUSTOM_HEADERS", "ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_MODEL", "CLAUDE_CODE_EFFORT_LEVEL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY", "CLAUDE_CODE_USE_AWS"):
         env.pop(name, None)
-    env["ANTHROPIC_BASE_URL"] = provider.base_url
-    env["ANTHROPIC_AUTH_TOKEN" if provider.auth_mode == "bearer" else "ANTHROPIC_API_KEY"] = token
+    if provider.execution_mode == "gateway":
+        if not gateway_url or not gateway_token:
+            raise ClaudapterError("Gateway mode requires a running local Protoverta gateway.")
+        env["ANTHROPIC_BASE_URL"] = gateway_url
+        env["ANTHROPIC_AUTH_TOKEN"] = gateway_token
+        env.pop(secret_var(provider.id), None)
+    else:
+        env["ANTHROPIC_BASE_URL"] = provider.base_url
+        env["ANTHROPIC_AUTH_TOKEN" if provider.auth_mode == "bearer" else "ANTHROPIC_API_KEY"] = token
     args = [executable, "--model", model]
+    if cross_protocol:
+        # Scope compatibility settings to this child process, never user files.
+        env.update({"MAX_THINKING_TOKENS": "0", "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING": "1",
+                    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1", "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS": "1",
+                    "DISABLE_PROMPT_CACHING": "1", "ENABLE_TOOL_SEARCH": "false"})
+        args += ["--settings", '{"alwaysThinkingEnabled":false}']
     if effort != "default":
         args += ["--effort", effort]
     if mode == "print":
@@ -40,9 +63,38 @@ def build_invocation(config: Config, provider: Provider, model: str, effort: str
     return args, env
 
 
-def launch(config: Config, provider: Provider, model: str, effort: str, extra: list[str], mode: str = "run") -> int:
-    args, env = build_invocation(config, provider, model, effort, extra, mode)
+def _gateway(config: Config, provider: Provider):
     try:
+        from protoverta.core import Protocol
+        from protoverta.server import GatewayConfig, gateway_session
+    except ImportError as exc:
+        raise ClaudapterError("Gateway mode needs a compatible Protoverta build installed in this Python environment.") from exc
+    try:
+        upstream = Protocol(provider.protocol)
+        base_url = provider.base_url.rstrip("/") + ("/v1" if upstream == Protocol.MESSAGES else "")
+        options = {} if upstream == Protocol.MESSAGES else {"client_profile": "claude", "messages_usage_policy": "deferred"}
+        gateway = GatewayConfig(upstream, base_url, get_token(config, provider.id), secrets.token_urlsafe(32), "x-api-key" if provider.auth_mode == "api_key" else "bearer", **options)
+    except (TypeError, ValueError) as exc:
+        raise ClaudapterError(f"Invalid or incompatible Protoverta gateway configuration: {exc}") from exc
+    return gateway, gateway_session
+
+
+def preflight(config: Config, provider: Provider, model: str, effort: str) -> None:
+    if provider.execution_mode == "gateway":
+        _gateway(config, provider)
+        build_invocation(config, provider, model, effort, [], gateway_url="http://127.0.0.1:0", gateway_token="preflight")
+    else:
+        build_invocation(config, provider, model, effort, [])
+
+
+def launch(config: Config, provider: Provider, model: str, effort: str, extra: list[str], mode: str = "run") -> int:
+    try:
+        if provider.execution_mode == "gateway":
+            gateway, gateway_session = _gateway(config, provider)
+            with gateway_session(gateway) as origin:
+                args, env = build_invocation(config, provider, model, effort, extra, mode, gateway_url=origin, gateway_token=gateway.inbound_token)
+                return subprocess.run(args, env=env, check=False).returncode
+        args, env = build_invocation(config, provider, model, effort, extra, mode)
         return subprocess.run(args, env=env, check=False).returncode
     except OSError as exc:
         raise ClaudapterError(f"Could not start Claude Code: {exc}") from exc

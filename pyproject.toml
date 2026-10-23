@@ -13,6 +13,7 @@ dependencies = []
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
+gateway = ["protoverta==0.3.0a1"]
 
 [project.scripts]
 claude-ca = "claudapter.cli:main"
