@@ -64,7 +64,8 @@ class LauncherTests(unittest.TestCase):
                 MESSAGES = "messages"
 
             class GatewayConfig:
-                def __init__(self, upstream, base_url, key, inbound_token, auth_style):
+                def __init__(self, upstream, base_url, key, inbound_token, auth_style, **policy):
+                    assert policy == {"upstream_reasoning": "provider_default"}
                     self.inbound_token = inbound_token
                     events.append((upstream, base_url, key, auth_style))
 

@@ -21,6 +21,7 @@ class Provider:
     default_model: str = ""
     execution_mode: str = "direct"
     protocol: str = "messages"
+    upstream_reasoning: str = "provider_default"
 
 
 @dataclass
@@ -96,6 +97,8 @@ def validate(config: Config) -> None:
             raise ClaudapterError(f"Invalid auth mode for {provider_id}.")
         if provider.execution_mode not in {"direct", "gateway"}:
             raise ClaudapterError(f"Invalid execution mode for {provider_id}.")
+        if provider.upstream_reasoning not in ("provider_default", "disabled", "openrouter_disabled") or (provider.execution_mode != "gateway" and provider.upstream_reasoning != "provider_default"):
+            raise ClaudapterError("An explicit upstream reasoning policy requires gateway mode.")
         if provider.protocol != "messages" and provider.execution_mode != "gateway":
             raise ClaudapterError("Chat and Responses providers require local Protoverta gateway mode.")
         name = secret_var(provider_id)
@@ -134,7 +137,7 @@ def save(config: Config) -> None:
     lines = ["schema_version = 1", "", "[defaults]", f"provider = {json.dumps(config.default_provider)}", f"model = {json.dumps(config.default_model)}", f"effort = {json.dumps(config.default_effort)}"]
     for provider in config.providers.values():
         lines += ["", "[[providers]]"]
-        for name in ("id", "display_name", "base_url", "auth_mode", "default_model", "execution_mode", "protocol"):
+        for name in ("id", "display_name", "base_url", "auth_mode", "default_model", "execution_mode", "protocol", "upstream_reasoning"):
             lines.append(f"{name} = {json.dumps(getattr(provider, name), ensure_ascii=False)}")
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None

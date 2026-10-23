@@ -22,7 +22,7 @@ _HTML = Path(__file__).with_name("web_template.html").read_text(encoding="utf-8"
 
 def public_config(config: Config) -> dict:
     return {
-        "providers": [{"id": p.id, "display_name": p.display_name, "base_url": p.base_url, "auth_mode": p.auth_mode, "default_model": p.default_model, "execution_mode": p.execution_mode, "protocol": p.protocol, "has_key": bool(get_token(config, p.id))} for p in config.providers.values()],
+        "providers": [{"id": p.id, "display_name": p.display_name, "base_url": p.base_url, "auth_mode": p.auth_mode, "default_model": p.default_model, "execution_mode": p.execution_mode, "protocol": p.protocol, "upstream_reasoning": p.upstream_reasoning, "has_key": bool(get_token(config, p.id))} for p in config.providers.values()],
         "defaults": {"provider": config.default_provider, "model": config.default_model, "effort": config.default_effort},
     }
 
@@ -182,7 +182,8 @@ def serve(config: Config) -> int:
                     default_model = str(body.get("default_model", "")).strip() or (old_provider.default_model if old_provider else "")
                     execution_mode = str(body.get("execution_mode", old_provider.execution_mode if old_provider else "direct"))
                     protocol = str(body.get("protocol", old_provider.protocol if old_provider else "messages"))
-                    provider = Provider(provider_id, display_name, validate_base_url(str(body.get("base_url", "")), protocol), mode, default_model, execution_mode, protocol)
+                    upstream_reasoning = str(body.get("upstream_reasoning", old_provider.upstream_reasoning if old_provider else "provider_default"))
+                    provider = Provider(provider_id, display_name, validate_base_url(str(body.get("base_url", "")), protocol), mode, default_model, execution_mode, protocol, upstream_reasoning)
                     updated = copy.deepcopy(config)
                     updated.providers[provider_id] = provider
                     persist_provider_change(config, updated, provider_id, str(body["api_key"]) if body.get("api_key") else None)

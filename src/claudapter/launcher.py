@@ -11,6 +11,8 @@ from .errors import ClaudapterError
 
 
 def build_invocation(config: Config, provider: Provider, model: str, effort: str, extra: list[str], mode: str = "run", *, gateway_url: str | None = None, gateway_token: str | None = None) -> tuple[list[str], dict[str, str]]:
+    if provider.upstream_reasoning not in ("provider_default", "disabled", "openrouter_disabled") or (provider.execution_mode != "gateway" and provider.upstream_reasoning != "provider_default"):
+        raise ClaudapterError("An explicit upstream reasoning policy requires gateway mode.")
     if provider.execution_mode not in {"direct", "gateway"}:
         raise ClaudapterError("Unsupported execution mode.")
     if provider.protocol not in {"messages", "chat", "responses"}:
@@ -45,9 +47,10 @@ def build_invocation(config: Config, provider: Provider, model: str, effort: str
     args = [executable, "--model", model]
     if cross_protocol:
         # Scope compatibility settings to this child process, never user files.
-        env.update({"MAX_THINKING_TOKENS": "0", "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING": "1",
-                    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1", "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS": "1",
+        env.update({"CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1", "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS": "1",
                     "DISABLE_PROMPT_CACHING": "1", "ENABLE_TOOL_SEARCH": "false"})
+    if cross_protocol or provider.upstream_reasoning != "provider_default":
+        env.update({"MAX_THINKING_TOKENS": "0", "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING": "1"})
         args += ["--settings", '{"alwaysThinkingEnabled":false}']
     if effort != "default":
         args += ["--effort", effort]
@@ -73,7 +76,7 @@ def _gateway(config: Config, provider: Provider):
         upstream = Protocol(provider.protocol)
         base_url = provider.base_url.rstrip("/") + ("/v1" if upstream == Protocol.MESSAGES else "")
         options = {} if upstream == Protocol.MESSAGES else {"client_profile": "claude", "messages_usage_policy": "deferred"}
-        gateway = GatewayConfig(upstream, base_url, get_token(config, provider.id), secrets.token_urlsafe(32), "x-api-key" if provider.auth_mode == "api_key" else "bearer", **options)
+        gateway = GatewayConfig(upstream, base_url, get_token(config, provider.id), secrets.token_urlsafe(32), "x-api-key" if provider.auth_mode == "api_key" else "bearer", upstream_reasoning=provider.upstream_reasoning, **options)
     except (TypeError, ValueError) as exc:
         raise ClaudapterError(f"Invalid or incompatible Protoverta gateway configuration: {exc}") from exc
     return gateway, gateway_session

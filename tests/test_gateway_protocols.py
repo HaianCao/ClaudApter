@@ -62,7 +62,7 @@ def test_gateway_passes_explicit_prefix_and_compatibility_policy(tmp_path, proto
     with patch.dict(sys.modules, {"protoverta.core": core, "protoverta.server": server}), patch("claudapter.launcher.get_token", return_value="secret"):
         _gateway(config, provider)
     assert captured["args"][1] == "https://example.test/api" + ("/v1" if protocol == "messages" else "")
-    assert captured["options"] == ({} if protocol == "messages" else {"client_profile": "claude", "messages_usage_policy": "deferred"})
+    assert captured["options"] == ({"upstream_reasoning": "provider_default"} if protocol == "messages" else {"client_profile": "claude", "messages_usage_policy": "deferred", "upstream_reasoning": "provider_default"})
 
 
 @pytest.mark.parametrize("protocol", ["chat", "responses"])

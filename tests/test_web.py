@@ -9,7 +9,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from unittest.mock import patch
 
-from claudapter.config import Config, Provider
+from claudapter.config import Config, Provider, load
 from claudapter.credentials import get_token, store_token
 from claudapter.web import _HTML, persist_provider_change, serve
 
@@ -81,6 +81,11 @@ class WebTests(unittest.TestCase):
                         self.assertIn("img-src 'self'", response.headers.get("Content-Security-Policy", ""))
                         page = response.read().decode()
                     token = re.search(r"const TOKEN='([^']+)'", page).group(1)
+                    for extra_fields in ({"upstream_reasoning": "openrouter_disabled"}, {}):
+                        edit = Request(url.split("?", 1)[0] + "api/provider", data=json.dumps({"id": "demo", "display_name": "Demo renamed", "base_url": "https://gateway.test", "execution_mode": "gateway", **extra_fields}).encode(), headers={"Content-Type": "application/json", "X-Claudapter-Token": token}, method="POST")
+                        with urlopen(edit, timeout=5) as response:
+                            self.assertEqual(json.load(response)["providers"][0]["upstream_reasoning"], "openrouter_disabled")
+                        self.assertEqual(load(config.path).providers["demo"].upstream_reasoning, "openrouter_disabled")
                     for name in ("ClaudApter_black.png", "ClaudApter_white.png", "ClaudApter_black_icon.png", "ClaudApter_white_icon.png"):
                         with urlopen(url.split("?", 1)[0] + "assets/" + name, timeout=5) as asset:
                             self.assertEqual(asset.headers.get("Content-Type"), "image/png")

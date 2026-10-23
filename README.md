@@ -60,6 +60,12 @@ When you choose **Run Claude Code**, the setup page stops and Claude Code takes 
 
 ### Optional local gateway
 
+In the provider editor, **Upstream reasoning** defaults to the provider/client
+settings. Choose **Disabled — OpenRouter** for OpenRouter models whose default
+reasoning cannot be translated, or **Disabled — standard API** for compatible
+upstreams. Disabling requires gateway mode and overrides effort; models requiring
+reasoning may reject it. Unsupported reasoning output is never silently hidden.
+
 Add `-WithGateway` to the installer command to include the pinned Protoverta component, then select **Local Protoverta gateway** as the connection mode. Native Messages preserves beta headers and thinking/signature payloads. Chat and Responses translation supports text and client-side function tools, including streaming and multiple tool calls.
 
 The gateway preview is on `integration/protoverta`, not stable `main`:
