@@ -66,13 +66,10 @@ reasoning cannot be translated, or **Disabled — standard API** for compatible
 upstreams. Disabling requires gateway mode and overrides effort; models requiring
 reasoning may reject it. Unsupported reasoning output is never silently hidden.
 
-Add `-WithGateway` to the installer command to include the pinned Protoverta component, then select **Local Protoverta gateway** as the connection mode. Native Messages preserves beta headers and thinking/signature payloads. Chat and Responses translation supports text and client-side function tools, including streaming and multiple tool calls.
+Once the preview is released, add `-WithGateway -SourceBranch integration/protoverta` to the installer command to include its pinned Protoverta component, then select **Local Protoverta gateway** as the connection mode. Native Messages preserves beta headers and thinking/signature payloads. Chat and Responses translation supports text and client-side function tools, including streaming and multiple tool calls.
 
-The gateway preview is on `integration/protoverta`, not stable `main`:
-
-```powershell
-& ([scriptblock]::Create((irm "https://raw.githubusercontent.com/HaianCao/ClaudApter/integration/protoverta/scripts/install.ps1"))) -WithGateway -SourceBranch integration/protoverta
-```
+The gateway preview is on `integration/protoverta`. Its one-line installer will
+be available after the pinned Protoverta `v0.3.0a3` wheel is published.
 
 Translated sessions disable thinking and unsupported experimental capabilities in the child process only. Cache hints and telemetry are omitted, and tool errors become labelled text. Initial token usage is provisional and corrected at completion using real upstream counts. Effort supports default/low/medium/high; hidden reasoning replay, multimodal content, hosted tools and compaction are not supported. Use native Messages for those features. Existing sessions containing unsupported blocks cannot be resumed through translation.
 
