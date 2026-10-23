@@ -72,7 +72,17 @@ To install the opt-in gateway preview from `integration/protoverta`, run:
 & ([scriptblock]::Create((irm "https://raw.githubusercontent.com/HaianCao/ClaudApter/integration/protoverta/scripts/install.ps1"))) -WithGateway -SourceBranch integration/protoverta
 ```
 
-This installs the pinned Protoverta `v0.3.0a3` release. Select **Local Protoverta gateway** as the connection mode. Native Messages preserves beta headers and thinking/signature payloads. Chat and Responses translation supports text and client-side function tools, including streaming and multiple tool calls. The regular `main` installer remains the stable, non-gateway path.
+The gateway component is version-pinned. Select **Local Protoverta gateway** as the connection mode. Native Messages preserves beta headers and thinking/signature payloads. Chat and Responses translation supports text and client-side function tools, including streaming and multiple tool calls. The regular `main` installer remains the stable, non-gateway path.
+
+Under **Advanced: model compatibility checks**, you can select a local capability
+registry file and require verified capabilities. Relative paths start at the
+configuration folder. Unsupported features are blocked before API calls; the
+strict option also blocks missing records. Leave this optional section empty
+unless you maintain capability records for your provider's exact API prefix and
+model IDs. For Messages, registry entries use the actual API prefix including
+`/v1`, even though the setup base URL omits it. Basic launch capabilities are
+checked before setup closes; tools and output formats are checked against each
+actual request.
 
 Translated sessions disable thinking and unsupported experimental capabilities in the child process only. Cache hints and telemetry are omitted, and tool errors become labelled text. Initial token usage is provisional and corrected at completion using real upstream counts. Effort supports default/low/medium/high; hidden reasoning replay, multimodal content, hosted tools and compaction are not supported. Use native Messages for those features. Existing sessions containing unsupported blocks cannot be resumed through translation.
 

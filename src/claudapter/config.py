@@ -22,6 +22,8 @@ class Provider:
     execution_mode: str = "direct"
     protocol: str = "messages"
     upstream_reasoning: str = "provider_default"
+    capabilities_file: str = ""
+    require_verified_capabilities: bool = False
 
 
 @dataclass
@@ -34,6 +36,17 @@ class Config:
 
 
 EFFORTS = {"default", "low", "medium", "high", "xhigh", "max"}
+
+
+def validate_capability_settings(path, required, mode):
+    if not isinstance(path, str) or "\0" in path or not isinstance(required, bool):
+        raise ClaudapterError("Capability registry path must be text and require_verified_capabilities must be boolean.")
+    path = path.strip()
+    if (path or required) and mode != "gateway":
+        raise ClaudapterError("Capability checks require gateway mode.")
+    if required and not path:
+        raise ClaudapterError("Choose a capability registry before requiring verified capabilities.")
+    return path, required
 
 
 def config_path() -> Path:
@@ -87,6 +100,7 @@ def validate(config: Config) -> None:
         raise ClaudapterError("Invalid effort level.")
     used_secret_names: set[str] = set()
     for provider_id, provider in config.providers.items():
+        validate_capability_settings(provider.capabilities_file, provider.require_verified_capabilities, provider.execution_mode)
         validate_provider_id(provider_id)
         if provider.id != provider_id or not provider.display_name.strip():
             raise ClaudapterError(f"Invalid provider: {provider_id}")
@@ -139,6 +153,9 @@ def save(config: Config) -> None:
         lines += ["", "[[providers]]"]
         for name in ("id", "display_name", "base_url", "auth_mode", "default_model", "execution_mode", "protocol", "upstream_reasoning"):
             lines.append(f"{name} = {json.dumps(getattr(provider, name), ensure_ascii=False)}")
+        registry_path, required = validate_capability_settings(provider.capabilities_file, provider.require_verified_capabilities, provider.execution_mode)
+        if registry_path:
+            lines.extend([f"capabilities_file = {json.dumps(registry_path, ensure_ascii=False)}", f"require_verified_capabilities = {str(required).lower()}"])
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:

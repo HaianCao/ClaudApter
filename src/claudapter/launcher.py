@@ -4,13 +4,15 @@ import os
 import secrets
 import shutil
 import subprocess
+from pathlib import Path
 
-from .config import Config, EFFORTS, Provider, secret_var
+from .config import Config, EFFORTS, Provider, secret_var, config_path, validate_capability_settings
 from .credentials import get_token
 from .errors import ClaudapterError
 
 
 def build_invocation(config: Config, provider: Provider, model: str, effort: str, extra: list[str], mode: str = "run", *, gateway_url: str | None = None, gateway_token: str | None = None) -> tuple[list[str], dict[str, str]]:
+    validate_capability_settings(provider.capabilities_file, provider.require_verified_capabilities, provider.execution_mode)
     if provider.upstream_reasoning not in ("provider_default", "disabled", "openrouter_disabled") or (provider.execution_mode != "gateway" and provider.upstream_reasoning != "provider_default"):
         raise ClaudapterError("An explicit upstream reasoning policy requires gateway mode.")
     if provider.execution_mode not in {"direct", "gateway"}:
@@ -76,15 +78,38 @@ def _gateway(config: Config, provider: Provider):
         upstream = Protocol(provider.protocol)
         base_url = provider.base_url.rstrip("/") + ("/v1" if upstream == Protocol.MESSAGES else "")
         options = {} if upstream == Protocol.MESSAGES else {"client_profile": "claude", "messages_usage_policy": "deferred"}
+        capabilities_file, required = validate_capability_settings(provider.capabilities_file, provider.require_verified_capabilities, provider.execution_mode)
+        if capabilities_file:
+            from protoverta.capabilities import CapabilityRegistry
+
+            path = Path(capabilities_file).expanduser()
+            if not path.is_absolute():
+                path = (config.path or config_path()).resolve().parent / path
+            options.update(capabilities=CapabilityRegistry.load(path), require_verified_capabilities=required)
         gateway = GatewayConfig(upstream, base_url, get_token(config, provider.id), secrets.token_urlsafe(32), "x-api-key" if provider.auth_mode == "api_key" else "bearer", upstream_reasoning=provider.upstream_reasoning, **options)
-    except (TypeError, ValueError) as exc:
+    except (ImportError, OSError, TypeError, ValueError) as exc:
         raise ClaudapterError(f"Invalid or incompatible Protoverta gateway configuration: {exc}") from exc
     return gateway, gateway_session
 
 
+def _verify_capabilities(gateway, model: str, effort: str) -> None:
+    registry = getattr(gateway, "capabilities", None)
+    if registry is None:
+        return
+    features = {"text", "streaming"}
+    if gateway.upstream_reasoning == "provider_default" and effort != "default":
+        features.add("reasoning_effort")
+    try:
+        report = registry.assess(gateway.upstream_base_url, gateway.upstream_protocol, model, features)
+        report.require(verified=gateway.require_verified_capabilities)
+    except ValueError as exc:
+        raise ClaudapterError(f"Model compatibility check failed: {exc}") from exc
+
+
 def preflight(config: Config, provider: Provider, model: str, effort: str) -> None:
     if provider.execution_mode == "gateway":
-        _gateway(config, provider)
+        gateway, _ = _gateway(config, provider)
+        _verify_capabilities(gateway, model, effort)
         build_invocation(config, provider, model, effort, [], gateway_url="http://127.0.0.1:0", gateway_token="preflight")
     else:
         build_invocation(config, provider, model, effort, [])
@@ -94,6 +119,7 @@ def launch(config: Config, provider: Provider, model: str, effort: str, extra: l
     try:
         if provider.execution_mode == "gateway":
             gateway, gateway_session = _gateway(config, provider)
+            _verify_capabilities(gateway, model, effort)
             with gateway_session(gateway) as origin:
                 args, env = build_invocation(config, provider, model, effort, extra, mode, gateway_url=origin, gateway_token=gateway.inbound_token)
                 return subprocess.run(args, env=env, check=False).returncode
