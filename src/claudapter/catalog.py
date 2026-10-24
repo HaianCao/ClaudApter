@@ -8,13 +8,13 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from .config import Config, Provider, cache_path
+from .config import Config, Provider, cache_path, claude_base_url
 from .credentials import get_token
 from .errors import ClaudapterError
 
 
 def _url(provider: Provider, suffix: str) -> str:
-    return provider.base_url.rstrip("/") + suffix
+    return claude_base_url(provider.base_url) + suffix
 
 
 def _headers(config: Config, provider: Provider) -> dict[str, str]:

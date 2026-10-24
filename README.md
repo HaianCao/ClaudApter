@@ -51,8 +51,8 @@ The setup page opens in your browser. Add a provider, enter its API key, refresh
 
 In the setup page:
 
-1. Select **Add** and enter a provider ID, display name, and gateway base URL. For example, `https://gateway.example.com` leads Claude Code to `https://gateway.example.com/v1/messages`.
-2. Choose **Bearer token** for `Authorization: Bearer ...` or **API key** for `x-api-key`, then enter your key.
+1. Select **Add** and enter a provider ID, display name, and base URL, for example `https://gateway.example.com/v1`. URLs without `/v1` also work; ClaudApter handles the suffix so requests never duplicate it. Do not append `/messages`.
+2. Choose **Bearer token** (recommended for gateways) for `Authorization: Bearer ...`. Choose **API key** for `x-api-key` only if your provider requires it, then enter the key without a `Bearer ` prefix.
 3. Select **Refresh models** to query the provider's model catalog, or type a model ID directly.
 4. Choose an effort level and select **Save as default** or **Run Claude Code**.
 
@@ -84,7 +84,9 @@ In PowerShell, run the uninstaller directly from GitHub:
 & ([scriptblock]::Create((irm "https://raw.githubusercontent.com/HaianCao/ClaudApter/main/scripts/uninstall.ps1")))
 ```
 
-It removes the ClaudApter launcher and its PATH entry while keeping provider settings and API keys. The official Claude Code CLI is not removed. To also remove ClaudApter's data, append `-DeleteData` to the command above and confirm the separate deletion prompt.
+It removes the launcher and its wrapper PATH entries, not the official Claude Code CLI. Separate prompts let you reset adapter environment overrides and delete default provider settings, API keys and cache (type `DELETE`). Everything is kept unless you confirm its removal.
+
+Environment reset clears only `CLAUDE_CA_CONFIG`, `CLAUDE_CA_CACHE` and `CLAUDE_CA_ENV_FILE` at user/process scope. It does not delete custom-path files, provider key variables, or shared `ANTHROPIC_*`/`OPENAI_*` variables. Machine-wide settings are not changed. Open a new terminal afterward. To explicitly request reset without prompts, append `-ResetEnvironment -NonInteractive`; data deletion still requires interactive confirmation.
 
 ## Privacy and security
 

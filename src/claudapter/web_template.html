@@ -38,9 +38,9 @@
             <label class="field"><span class="field-label">Provider ID</span><input class="input" id="id" required pattern="[a-z0-9][a-z0-9_-]*" placeholder="my_gateway" autocomplete="off"><span class="hint">Lowercase, no spaces. Use _ or - between words.</span></label>
             <label class="field"><span class="field-label">Display name</span><input class="input" id="displayName" required placeholder="My Gateway" autocomplete="off"></label>
           </div>
-          <label class="field"><span class="field-label">Gateway base URL</span><input class="input" id="baseUrl" type="url" required placeholder="https://gateway.example.com" autocomplete="url"><span class="hint">Enter the URL before /v1. Claude Code requests /v1/messages.</span></label>
-          <label class="field"><span class="field-label">Authentication</span><select id="authMode"><option value="bearer">Bearer token (Authorization header)</option><option value="api_key">API key (x-api-key header)</option></select></label>
-          <label class="field"><span class="field-label">API key or token <span>Optional when editing</span></span><input class="input" id="apiKey" type="password" autocomplete="new-password" placeholder="Paste API key"></label>
+          <label class="field"><span class="field-label">Base URL</span><input class="input" id="baseUrl" type="url" required placeholder="https://provider.example/v1" autocomplete="url"><span class="hint">Example: <code>https://provider.example/v1</code>. URLs with or without /v1 work; do not include /messages.</span></label>
+          <label class="field"><span class="field-label">Authentication</span><select id="authMode"><option value="bearer">Bearer token (recommended)</option><option value="api_key">API key (x-api-key header)</option></select><span class="hint">Bearer is recommended for gateways. Choose x-api-key only if your provider requires it.</span></label>
+          <label class="field"><span class="field-label">API key or token <span>Optional when editing</span></span><input class="input" id="apiKey" type="password" autocomplete="new-password" placeholder="Paste API key"><span class="hint">Paste only the API key, without the Bearer prefix.</span></label>
           <div class="actions"><button class="btn primary" type="submit">Save provider</button><button class="btn" type="button" id="cancel">Cancel</button></div>
         </form>
         <div class="divider"></div><p class="note">Provider IDs are internal identifiers; the selector displays your provider's display name.</p>

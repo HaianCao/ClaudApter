@@ -2,7 +2,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from claudapter.config import Config, Provider, load, save, secret_var, validate_base_url
+from claudapter.config import (
+    Config,
+    Provider,
+    claude_base_url,
+    load,
+    save,
+    secret_var,
+    validate_base_url,
+)
 from claudapter.credentials import get_token, remove_token, store_token
 from claudapter.errors import ClaudapterError
 
@@ -20,9 +28,12 @@ class ConfigTests(unittest.TestCase):
             remove_token(config, "my_gateway")
             self.assertFalse(get_token(config, "my_gateway"))
 
-    def test_url_must_be_gateway_root(self):
+    def test_url_accepts_api_prefix_and_legacy_gateway_root(self):
         self.assertEqual(validate_base_url("https://example.test/api/"), "https://example.test/api")
-        for value in ("http://example.test", "https://example.test/v1", "https://example.test/v1/messages", "https://user:pass@example.test", "https://example.test?key=secret", "https://[invalid", "https://example.test:bad", "https://:443"):
+        self.assertEqual(validate_base_url("https://example.test/api/v1/"), "https://example.test/api/v1")
+        self.assertEqual(claude_base_url("https://example.test/api/v1/"), "https://example.test/api")
+        self.assertEqual(claude_base_url("https://example.test/api"), "https://example.test/api")
+        for value in ("http://example.test", "https://example.test/v1/messages", "https://example.test/responses", "https://example.test/chat/completions", "https://user:pass@example.test", "https://example.test?key=secret", "https://[invalid", "https://example.test:bad", "https://:443"):
             with self.subTest(value=value), self.assertRaises(ClaudapterError):
                 validate_base_url(value)
 

@@ -1,4 +1,4 @@
-param([switch]$SkipClaudeInstall, [switch]$NonInteractive)
+param([switch]$SkipClaudeInstall, [switch]$NonInteractive, [switch]$NoPathChanges)
 $ErrorActionPreference = 'Stop'
 $sourceTempRoot = $null
 
@@ -36,6 +36,7 @@ function Get-SupportedPython {
 }
 
 function Add-UserPath([string]$Directory) {
+    if ($NoPathChanges) { return }
     if (-not (Test-Path -LiteralPath $Directory)) { return }
     $current = [Environment]::GetEnvironmentVariable('Path', 'User')
     $entries = @($current -split ';' | Where-Object { $_ })
@@ -53,10 +54,9 @@ try {
         $candidate = Split-Path -Parent $PSScriptRoot
         if (Test-ClaudApterSource $candidate) { $repoRoot = $candidate }
     }
-    Write-Host 'This installer sets up ClaudApter (claude-ca) for your Windows user.'
-    Write-Host 'It can install Python and the official Claude Code CLI if either is missing. No administrator access is requested.'
+    Write-Host 'This installs or updates ClaudApter (claude-ca) for your Windows user.' -ForegroundColor White
+    Write-Host 'Missing Python or the official coding CLI may be installed. No administrator access is requested.'
     if (-not $repoRoot) { Write-Host 'ClaudApter source will be downloaded from its GitHub repository.' }
-    Write-Host 'After installation, run claude-ca setup when you are ready to configure a provider.'
     if (-not $NonInteractive -and (Read-Host 'Continue? [y/N]') -notmatch '^(y|yes)$') { return }
 
     if (-not $repoRoot) {
@@ -105,30 +105,31 @@ try {
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $commandPath)) { throw 'ClaudApter package installation failed.' }
     Add-UserPath (Join-Path $venv 'Scripts')
 
+    Write-Step 'Checking the official Claude Code CLI'
     $claudeCommand = Get-Command claude -ErrorAction SilentlyContinue
     $nativeClaude = Join-Path $env:USERPROFILE '.local\bin\claude.exe'
     if (-not $claudeCommand -and (Test-Path -LiteralPath $nativeClaude)) {
         Add-UserPath (Split-Path -Parent $nativeClaude)
-        $claudeCommand = Get-Command claude -ErrorAction SilentlyContinue
+        $claudeCommand = $nativeClaude
     }
+    if ($SkipClaudeInstall) { Write-Host 'Skipped official CLI installation (-SkipClaudeInstall).' }
+    elseif ($claudeCommand) { Write-Host 'Official CLI is already available; left unchanged.' }
     if (-not $claudeCommand -and -not $SkipClaudeInstall) {
-        Write-Host 'Official Claude Code CLI was not found.' -ForegroundColor Yellow
-        if ((Read-Host 'Install it using the official Anthropic Windows installer? [y/N]') -match '^(y|yes)$') {
-            $officialScript = Join-Path ([IO.Path]::GetTempPath()) ("claude-official-{0}.ps1" -f [guid]::NewGuid())
-            try {
-                Invoke-WebRequest -UseBasicParsing -Uri 'https://claude.ai/install.ps1' -OutFile $officialScript
-                & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $officialScript
-                if ($LASTEXITCODE -ne 0) { throw 'Official Claude Code installer failed.' }
-            }
-            finally { Remove-Item -LiteralPath $officialScript -Force -ErrorAction SilentlyContinue }
-            if (Test-Path -LiteralPath $nativeClaude) { Add-UserPath (Split-Path -Parent $nativeClaude) }
+        Write-Step 'Installing the official Claude Code CLI'
+        $officialScript = Join-Path ([IO.Path]::GetTempPath()) ("claude-official-{0}.ps1" -f [guid]::NewGuid())
+        try {
+            Invoke-WebRequest -UseBasicParsing -Uri 'https://claude.ai/install.ps1' -OutFile $officialScript
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $officialScript
+            if ($LASTEXITCODE -ne 0) { throw 'Official Claude Code installer failed.' }
         }
+        finally { Remove-Item -LiteralPath $officialScript -Force -ErrorAction SilentlyContinue }
+        if (Test-Path -LiteralPath $nativeClaude) { Add-UserPath (Split-Path -Parent $nativeClaude) }
     }
-    if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
+    if (-not $SkipClaudeInstall -and -not (Get-Command claude -ErrorAction SilentlyContinue) -and -not (Test-Path -LiteralPath $nativeClaude)) {
         Write-Warning 'Claude Code CLI is not on PATH yet. Install it or open a new terminal and verify: claude --version'
     }
     if ($isUpdate) { Write-Host 'ClaudApter update complete. Provider settings and API keys were preserved.' -ForegroundColor Green }
-    else { Write-Host 'ClaudApter installation complete. Setup was not opened automatically.' -ForegroundColor Green }
+    else { Write-Host 'ClaudApter installation complete.' -ForegroundColor Green }
     Write-Host 'Open a new CMD, PowerShell, or Windows Terminal tab and run: claude-ca setup'
 }
 catch {

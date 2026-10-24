@@ -4,7 +4,7 @@ import os
 import shutil
 import subprocess
 
-from .config import Config, EFFORTS, Provider
+from .config import EFFORTS, Config, Provider, claude_base_url
 from .credentials import get_token
 from .errors import ClaudapterError
 
@@ -23,7 +23,7 @@ def build_invocation(config: Config, provider: Provider, model: str, effort: str
     env = os.environ.copy()
     for name in ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_CUSTOM_HEADERS", "ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_MODEL", "CLAUDE_CODE_EFFORT_LEVEL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY", "CLAUDE_CODE_USE_AWS"):
         env.pop(name, None)
-    env["ANTHROPIC_BASE_URL"] = provider.base_url
+    env["ANTHROPIC_BASE_URL"] = claude_base_url(provider.base_url)
     env["ANTHROPIC_AUTH_TOKEN" if provider.auth_mode == "bearer" else "ANTHROPIC_API_KEY"] = token
     args = [executable, "--model", model]
     if effort != "default":

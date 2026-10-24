@@ -71,9 +71,15 @@ def validate_base_url(value: str) -> str:
         raise ClaudapterError("Base URL has an invalid host or port.") from exc
     if re.search(r"\s", value) or parsed.scheme != "https" or not hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or (port is not None and port < 1):
         raise ClaudapterError("Base URL must be an HTTPS origin or gateway prefix without credentials, query or fragment.")
-    if parsed.path.endswith("/v1") or parsed.path.endswith("/v1/messages"):
-        raise ClaudapterError("Enter the gateway base URL before /v1; Claude Code appends /v1/messages itself.")
+    if parsed.path.endswith(("/messages", "/responses", "/chat/completions")):
+        raise ClaudapterError("Enter the base URL, for example https://provider.example/v1, without the endpoint suffix.")
     return value
+
+
+def claude_base_url(value: str) -> str:
+    """Accept the API prefix users copy; Claude appends /v1/messages itself."""
+    value = validate_base_url(value)
+    return value[:-3] if urlsplit(value).path.endswith("/v1") else value
 
 
 def validate(config: Config) -> None:

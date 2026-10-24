@@ -9,6 +9,6 @@ effort = "default"
 [[providers]]
 id = "example"
 display_name = "Example Gateway"
-base_url = "https://gateway.example.com"
+base_url = "https://gateway.example.com/v1"
 auth_mode = "bearer" # bearer or api_key
 default_model = "claude-model-id"
