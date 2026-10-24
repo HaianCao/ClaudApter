@@ -24,7 +24,7 @@ from .config import (
 )
 from .credentials import env_path, get_token, remove_token, store_token
 from .errors import ClaudapterError
-from .gateway_options import validate_gateway_limits
+from .gateway_options import validate_gateway_limits, validate_gateway_runtime
 from .launcher import launch, preflight
 from .settings_store import SettingsGuard, atomic_bytes
 from .web_security import local_request
@@ -39,6 +39,7 @@ def public_config(config: Config) -> dict:
     }
     for provider in result["providers"]:
         provider["gateway_limits"] = config.providers[provider["id"]].gateway_limits
+        provider["gateway_runtime"] = config.providers[provider["id"]].gateway_runtime
     return result
 
 
@@ -153,7 +154,10 @@ def serve(config: Config) -> int:
                 self.send_header("X-Content-Type-Options", "nosniff")
                 self.send_header("Content-Length", str(len(payload)))
                 self.end_headers()
-                self.wfile.write(payload)
+                try:
+                    self.wfile.write(payload)
+                except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                    pass  # A closed tab can cancel an in-flight brand asset.
                 return
             if not self._authorized():
                 self._json({"error": "Unauthorized"}, HTTPStatus.FORBIDDEN)
@@ -217,6 +221,7 @@ def serve(config: Config) -> int:
                     capabilities_file, require_verified = validate_capability_settings(body.get("capabilities_file", old_provider.capabilities_file if old_provider else ""), body.get("require_verified_capabilities", old_provider.require_verified_capabilities if old_provider else False), execution_mode)
                     provider = Provider(provider_id, display_name, validate_base_url(str(body.get("base_url", "")), protocol), mode, default_model, execution_mode, protocol, upstream_reasoning, capabilities_file, require_verified)
                     provider.gateway_limits = validate_gateway_limits(body.get("gateway_limits", old_provider.gateway_limits if old_provider else {}), execution_mode)
+                    provider.gateway_runtime = validate_gateway_runtime(body.get("gateway_runtime", old_provider.gateway_runtime if old_provider else {}), execution_mode)
                     updated = copy.deepcopy(config)
                     updated.providers[provider_id] = provider
                     persist_provider_change(config, updated, provider_id, str(body["api_key"]) if body.get("api_key") else None)

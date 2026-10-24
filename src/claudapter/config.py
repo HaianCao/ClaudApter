@@ -25,6 +25,7 @@ class Provider:
     capabilities_file: str = ""
     require_verified_capabilities: bool = False
     gateway_limits: dict = field(default_factory=dict)
+    gateway_runtime: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -114,6 +115,9 @@ def validate(config: Config) -> None:
         if provider.protocol not in {"messages", "chat", "responses"}:
             raise ClaudapterError(f"Invalid protocol for {provider_id}.")
         validate_base_url(provider.base_url, provider.protocol)
+        from .gateway_options import validate_gateway_runtime
+
+        validate_gateway_runtime(provider.gateway_runtime, provider.execution_mode)
         if provider.auth_mode not in {"bearer", "api_key"}:
             raise ClaudapterError(f"Invalid auth mode for {provider_id}.")
         if provider.execution_mode not in {"direct", "gateway"}:
@@ -166,6 +170,10 @@ def save(config: Config) -> None:
         if provider.gateway_limits:
             from .gateway_options import limits_toml
             lines.append("gateway_limits = " + limits_toml(provider.gateway_limits))
+        if provider.gateway_runtime:
+            from .gateway_options import runtime_toml
+
+            lines.append("gateway_runtime = " + runtime_toml(provider.gateway_runtime))
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:

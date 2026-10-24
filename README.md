@@ -116,6 +116,15 @@ It removes the launcher and its wrapper PATH entries, not the official Claude Co
 
 Environment reset clears only `CLAUDE_CA_CONFIG`, `CLAUDE_CA_CACHE` and `CLAUDE_CA_ENV_FILE` at user/process scope. It does not delete custom-path files, provider key variables, or shared `ANTHROPIC_*`/`OPENAI_*` variables. Machine-wide settings are not changed. Open a new terminal afterward. To explicitly request reset without prompts, append `-ResetEnvironment -NonInteractive`; data deletion still requires interactive confirmation.
 
+## Advanced gateway settings
+
+Optional advanced gateway policies support evidence-scoped provider profile
+files, shared quota databases and bounded HTTP-rejection retries. Leave them
+blank for existing behavior. They require the matching unpublished Protoverta
+source build, not the older public alpha-6 wheel. Use the same absolute database
+path in both launchers to coordinate the same upstream prefix/credential.
+These policies do not change direct mode or enable model fallback.
+
 ## Privacy and security
 
 Provider settings and API keys are stored on your computer. API keys are kept in a local `.env` file in plain text, so protect the file and never commit or share it. The setup page listens only on your own computer (`127.0.0.1`) and uses a per-session access token. Direct mode does not proxy conversations; optional gateway mode starts a temporary loopback Protoverta server and stops it when Claude Code exits.
