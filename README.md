@@ -66,13 +66,16 @@ reasoning cannot be translated, or **Disabled — standard API** for compatible
 upstreams. Disabling requires gateway mode and overrides effort; models requiring
 reasoning may reject it. Unsupported reasoning output is never silently hidden.
 
-To install the opt-in gateway preview from `integration/protoverta`, run:
+This checkout prepares gateway preview **0.2.0a1** with Protoverta **0.3.0a7**.
+Until those snapshots are published, use the local installer with
+`-ProtovertaWheel PATH_TO_A7_WHEEL`; the public a6 wheel lacks the new runtime
+options. Once the matching preview/core are published, install with:
 
 ```powershell
 & ([scriptblock]::Create((irm "https://raw.githubusercontent.com/HaianCao/ClaudApter/integration/protoverta/scripts/install.ps1"))) -WithGateway -SourceBranch integration/protoverta
 ```
 
-The gateway component is version-pinned. Select **Local Protoverta gateway** as the connection mode. Native Messages preserves beta headers and thinking/signature payloads. Chat and Responses translation supports text, URL/base64 user image inputs and client-side function tools, including streaming and multiple tool calls. Image tool results and provider-owned file IDs remain unsupported. Public reasoning from Chat/Responses is not converted into fabricated Messages thinking/signatures. The regular `main` installer remains the stable, non-gateway path.
+The gateway component is version-pinned. Select **Local Protoverta gateway** as the connection mode. Native Messages preserves beta headers and thinking/signature payloads. Chat and Responses translation supports text, URL/base64 user image inputs and client-side function tools, including streaming and multiple tool calls. Rich image tool results map Messages ↔ Responses; Chat routes and provider-owned file IDs remain unsupported. Public reasoning from Chat/Responses is not converted into fabricated Messages thinking/signatures. The regular `main` installer remains the stable, non-gateway path.
 
 Under **Advanced: model compatibility checks**, you can select a local capability
 registry file and require verified capabilities. Relative paths start at the
@@ -80,11 +83,11 @@ configuration folder. Unsupported features are blocked before API calls; the
 strict option also blocks missing records. Leave this optional section empty
 unless you maintain capability records for your provider's exact API prefix and
 model IDs. For Messages, registry entries use the actual API prefix including
-`/v1`, even though the setup base URL omits it. Basic launch capabilities are
+`/v1`, whether setup was given the root URL or a URL already ending in `/v1`. Basic launch capabilities are
 checked before setup closes; tools and output formats are checked against each
 actual request.
 
-Translated sessions disable thinking and unsupported experimental capabilities in the child process only. Cache hints and telemetry are omitted, and tool errors become labelled text. Initial token usage is provisional and corrected at completion using real upstream counts. Effort supports default/low/medium/high; hidden reasoning replay, multimodal content, hosted tools and compaction are not supported. Use native Messages for those features. Existing sessions containing unsupported blocks cannot be resumed through translation.
+Translated sessions disable thinking and unsupported experimental capabilities in the child process only. Cache hints and telemetry are omitted, and tool errors become labelled text. Initial token usage is provisional and corrected at completion using real upstream counts. Effort supports default/low/medium/high; hidden reasoning replay, audio/video, hosted tools and compaction are not supported. Use a compatible native Messages provider when you need features outside the translated subset. Existing sessions containing unsupported blocks cannot be resumed through translation.
 
 ## Use ClaudApter
 

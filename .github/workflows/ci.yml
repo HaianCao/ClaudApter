@@ -1,19 +1,45 @@
 name: CI
 on: [push, pull_request]
+permissions:
+  contents: read
 jobs:
   test:
+    strategy:
+      fail-fast: false
+      matrix:
+        gateway: [false, true]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install the pinned gateway wheel
+        if: matrix.gateway
+        run: python -m pip install https://github.com/HaianCao/Protoverta/releases/download/v0.3.0a7/protoverta-0.3.0a7-py3-none-any.whl
+      - name: Verify direct-only dependency boundary
+        if: ${{ !matrix.gateway }}
+        run: python -c "import importlib.util; assert importlib.util.find_spec('protoverta') is None"
       - name: Install and test
         run: |
-          python -m pip install -e ".[test]" build
-          python -m pytest -q
+          python -m pip install -e ".[test]" build ruff==0.17.2
+          if ($LASTEXITCODE) { throw 'Dependency installation failed' }
+          python -m pytest -q --junitxml=test-results.xml
+          if ($LASTEXITCODE) { throw 'Tests failed' }
+          python -m ruff check src tests scripts
+          if ($LASTEXITCODE) { throw 'Lint failed' }
           python -m build --wheel
+          if ($LASTEXITCODE) { throw 'Build failed' }
           python -c "import glob, zipfile; wheel=glob.glob('dist/*.whl')[0]; names=set(zipfile.ZipFile(wheel).namelist()); expected={'claudapter/web_template.html','claudapter/assets/ClaudApter_black.png','claudapter/assets/ClaudApter_white.png','claudapter/assets/ClaudApter_black_icon.png','claudapter/assets/ClaudApter_white_icon.png'}; missing=expected-names; assert not missing, f'Missing package files: {missing}'"
+      - name: Gateway tests must not skip or use an obsolete runtime
+        if: matrix.gateway
+        run: |
+          python -c "from protoverta.server import GatewayConfig; import dataclasses; assert {'retry_attempts','shared_admission_db','client_tool_search','provider_profiles'} <= {f.name for f in dataclasses.fields(GatewayConfig)}"
+          if ($LASTEXITCODE) { throw 'Incompatible gateway runtime' }
+          python -c "import xml.etree.ElementTree as E; skipped=[t.attrib for t in E.parse('test-results.xml').iter('testcase') if t.find('skipped') is not None and any(n in t.get('classname','') for n in ('test_gateway_limits','test_gateway_runtime'))]; assert not skipped, skipped"
       - name: Check PowerShell syntax
         shell: pwsh
         run: |
@@ -33,7 +59,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'claude-ca --help failed' }
           & .\scripts\install.ps1 -SkipClaudeInstall -NonInteractive -WithGateway
           $python = Join-Path (Split-Path -Parent $launcher) 'python.exe'
-          & $python -c "import importlib.metadata; assert importlib.metadata.version('protoverta') == '0.3.0a6'"
+          & $python -c "import importlib.metadata; assert importlib.metadata.version('protoverta') == '0.3.0a7'"
           if ($LASTEXITCODE -ne 0) { throw 'Released gateway component was not installed' }
           & .\scripts\install.ps1 -SkipClaudeInstall -NonInteractive
           & $python -c "import protoverta.server"
