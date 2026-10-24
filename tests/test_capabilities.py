@@ -57,9 +57,8 @@ def test_failed_preflight_does_not_open_listener_or_launch_cli():
     registry.assess.return_value = report
     gateway = types.SimpleNamespace(capabilities=registry, upstream_base_url=provider.base_url + "/v1", upstream_protocol="messages", upstream_reasoning="provider_default", require_verified_capabilities=True)
     listener = Mock()
-    with patch("claudapter.launcher._gateway", return_value=(gateway, listener)), patch("claudapter.launcher.build_invocation") as build:
-        with pytest.raises(ClaudapterError, match="unverified=streaming"):
-            preflight(Config(), provider, "model-a", "default")
+    with patch("claudapter.launcher._gateway", return_value=(gateway, listener)), patch("claudapter.launcher.build_invocation") as build, pytest.raises(ClaudapterError, match="unverified=streaming"):
+        preflight(Config(), provider, "model-a", "default")
     listener.assert_not_called()
     build.assert_not_called()
     assert registry.assess.call_args.args[2] == "model-a"

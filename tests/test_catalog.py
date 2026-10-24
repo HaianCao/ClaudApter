@@ -12,9 +12,8 @@ from claudapter.errors import ClaudapterError
 
 
 class _Response:
-    headers = {}
-
     def __init__(self, data):
+        self.headers = {}
         self.data = io.BytesIO(json.dumps(data).encode())
 
     def __enter__(self):
@@ -31,9 +30,8 @@ class CatalogTests(unittest.TestCase):
     def test_malformed_content_length_is_reported_cleanly(self):
         response = _Response({"data": []})
         response.headers = {"Content-Length": "not-a-number"}
-        with patch("claudapter.catalog._OPENER.open", return_value=response):
-            with self.assertRaisesRegex(ClaudapterError, "Content-Length"):
-                request_json(None)
+        with patch("claudapter.catalog._OPENER.open", return_value=response), self.assertRaisesRegex(ClaudapterError, "Content-Length"):
+            request_json(None)
 
     def test_model_names_are_normalized_and_bad_cache_is_ignored(self):
         with tempfile.TemporaryDirectory() as directory:

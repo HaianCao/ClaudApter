@@ -2,7 +2,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from claudapter.config import Config, Provider, load, save, secret_var, validate_base_url
+from claudapter.config import (
+    Config,
+    Provider,
+    load,
+    save,
+    secret_var,
+    validate_base_url,
+)
 from claudapter.credentials import get_token, remove_token, store_token
 from claudapter.errors import ClaudapterError
 

@@ -1,5 +1,5 @@
-import tempfile
 import sys
+import tempfile
 import types
 import unittest
 from contextlib import contextmanager

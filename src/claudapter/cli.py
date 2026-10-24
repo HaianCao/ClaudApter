@@ -4,7 +4,7 @@ import argparse
 import sys
 
 from .catalog import fetch_models, probe_messages
-from .config import Config, EFFORTS, load
+from .config import EFFORTS, Config, load
 from .errors import ClaudapterError
 from .launcher import launch
 
