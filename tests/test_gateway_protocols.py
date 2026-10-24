@@ -40,6 +40,21 @@ def test_cross_protocol_launcher_settings_are_child_only(tmp_path):
             build_invocation(config, provider, "m", "max", [], gateway_url="http://127.0.0.1:8765", gateway_token="local")
 
 
+def test_loopback_proxy_bypass_does_not_change_parent_or_direct_mode(tmp_path):
+    provider = Provider("demo", "Demo", "https://example.test", execution_mode="gateway", protocol="messages")
+    config = Config({"demo": provider}, path=tmp_path / "config.toml")
+    with patch("claudapter.launcher.shutil.which", return_value="claude.exe"), patch("claudapter.launcher.get_token", return_value="secret"), patch.dict(os.environ, {"NO_PROXY": "internal.test, other.test, localhost", "HTTPS_PROXY": "http://proxy.test:8080"}, clear=True):
+        before = dict(os.environ)
+        _args, env = build_invocation(config, provider, "m", "default", [], gateway_url="http://127.0.0.1:8765", gateway_token="local")
+        assert dict(os.environ) == before
+        assert env["NO_PROXY"] == env["no_proxy"]
+        assert {"internal.test", "other.test", "localhost", "127.0.0.1", "::1"} <= set(env["NO_PROXY"].split(","))
+        assert env["HTTPS_PROXY"] == before["HTTPS_PROXY"]
+        provider.execution_mode = "direct"
+        _args, direct = build_invocation(config, provider, "m", "default", [])
+        assert direct["NO_PROXY"] == before["NO_PROXY"]
+
+
 @pytest.mark.parametrize("protocol", ["messages", "chat", "responses"])
 def test_gateway_passes_explicit_prefix_and_compatibility_policy(tmp_path, protocol):
     class Protocol(StrEnum):

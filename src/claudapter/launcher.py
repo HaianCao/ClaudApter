@@ -6,9 +6,23 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from .config import Config, EFFORTS, Provider, secret_var, config_path, validate_capability_settings
+from .config import (
+    EFFORTS,
+    Config,
+    Provider,
+    config_path,
+    secret_var,
+    validate_capability_settings,
+)
 from .credentials import get_token
 from .errors import ClaudapterError
+
+
+def _bypass_loopback_proxy(env: dict[str, str]) -> None:
+    entries = [value.strip() for key in ("NO_PROXY", "no_proxy") for value in env.get(key, "").split(",") if value.strip()]
+    entries.extend(("127.0.0.1", "localhost", "::1"))
+    merged = ",".join({value.casefold(): value for value in entries}.values())
+    env.update(NO_PROXY=merged, no_proxy=merged)
 
 
 def build_invocation(config: Config, provider: Provider, model: str, effort: str, extra: list[str], mode: str = "run", *, gateway_url: str | None = None, gateway_token: str | None = None) -> tuple[list[str], dict[str, str]]:
@@ -43,6 +57,7 @@ def build_invocation(config: Config, provider: Provider, model: str, effort: str
         env["ANTHROPIC_BASE_URL"] = gateway_url
         env["ANTHROPIC_AUTH_TOKEN"] = gateway_token
         env.pop(secret_var(provider.id), None)
+        _bypass_loopback_proxy(env)
     else:
         env["ANTHROPIC_BASE_URL"] = provider.base_url
         env["ANTHROPIC_AUTH_TOKEN" if provider.auth_mode == "bearer" else "ANTHROPIC_API_KEY"] = token
