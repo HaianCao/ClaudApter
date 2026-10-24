@@ -24,6 +24,7 @@ class Provider:
     upstream_reasoning: str = "provider_default"
     capabilities_file: str = ""
     require_verified_capabilities: bool = False
+    gateway_limits: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -100,6 +101,8 @@ def validate(config: Config) -> None:
         raise ClaudapterError("Invalid effort level.")
     used_secret_names: set[str] = set()
     for provider_id, provider in config.providers.items():
+        from .gateway_options import validate_gateway_limits
+        validate_gateway_limits(provider.gateway_limits, provider.execution_mode)
         validate_capability_settings(provider.capabilities_file, provider.require_verified_capabilities, provider.execution_mode)
         validate_provider_id(provider_id)
         if provider.id != provider_id or not provider.display_name.strip():
@@ -156,6 +159,9 @@ def save(config: Config) -> None:
         registry_path, required = validate_capability_settings(provider.capabilities_file, provider.require_verified_capabilities, provider.execution_mode)
         if registry_path:
             lines.extend([f"capabilities_file = {json.dumps(registry_path, ensure_ascii=False)}", f"require_verified_capabilities = {str(required).lower()}"])
+        if provider.gateway_limits:
+            from .gateway_options import limits_toml
+            lines.append("gateway_limits = " + limits_toml(provider.gateway_limits))
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:

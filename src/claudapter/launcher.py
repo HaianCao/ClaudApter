@@ -16,6 +16,7 @@ from .config import (
 )
 from .credentials import get_token
 from .errors import ClaudapterError
+from .gateway_options import validate_gateway_limits
 
 
 def _bypass_loopback_proxy(env: dict[str, str]) -> None:
@@ -93,6 +94,7 @@ def _gateway(config: Config, provider: Provider):
         upstream = Protocol(provider.protocol)
         base_url = provider.base_url.rstrip("/") + ("/v1" if upstream == Protocol.MESSAGES else "")
         options = {} if upstream == Protocol.MESSAGES else {"client_profile": "claude", "messages_usage_policy": "deferred"}
+        options.update(validate_gateway_limits(provider.gateway_limits, provider.execution_mode))
         capabilities_file, required = validate_capability_settings(provider.capabilities_file, provider.require_verified_capabilities, provider.execution_mode)
         if capabilities_file:
             from protoverta.capabilities import CapabilityRegistry

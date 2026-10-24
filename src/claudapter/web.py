@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 import copy
+import json
 import secrets
 import threading
 import webbrowser
@@ -11,42 +11,58 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from .catalog import cached_models, fetch_models
-from .config import Config, EFFORTS, Provider, save, secret_var, validate, validate_base_url, validate_provider_id, validate_capability_settings
-from .credentials import _read, env_path, get_token, remove_token, store_token
+from .config import (
+    EFFORTS,
+    Config,
+    Provider,
+    config_path,
+    save,
+    validate,
+    validate_base_url,
+    validate_capability_settings,
+    validate_provider_id,
+)
+from .credentials import env_path, get_token, remove_token, store_token
 from .errors import ClaudapterError
+from .gateway_options import validate_gateway_limits
 from .launcher import launch, preflight
-
+from .settings_store import SettingsGuard, atomic_bytes
+from .web_security import local_request
 
 _HTML = Path(__file__).with_name("web_template.html").read_text(encoding="utf-8")
 
 
 def public_config(config: Config) -> dict:
-    return {
+    result = {
         "providers": [{"id": p.id, "display_name": p.display_name, "base_url": p.base_url, "auth_mode": p.auth_mode, "default_model": p.default_model, "execution_mode": p.execution_mode, "protocol": p.protocol, "upstream_reasoning": p.upstream_reasoning, "capabilities_file": p.capabilities_file, "require_verified_capabilities": p.require_verified_capabilities, "has_key": bool(get_token(config, p.id))} for p in config.providers.values()],
         "defaults": {"provider": config.default_provider, "model": config.default_model, "effort": config.default_effort},
     }
+    for provider in result["providers"]:
+        provider["gateway_limits"] = config.providers[provider["id"]].gateway_limits
+    return result
 
 
 def persist_provider_change(config: Config, updated: Config, provider_id: str, token: str | None) -> None:
     """Persist a provider edit and its secret, restoring the secret if config saving fails."""
     validate(updated)
-    previous = _read(env_path(config)).get(secret_var(provider_id)) if token is not None else None
-    if token is not None:
-        if token:
-            store_token(config, provider_id, token)
-        else:
-            remove_token(config, provider_id)
+    target = env_path(config)
+    previous = target.read_bytes() if token is not None and target.exists() else None
     try:
+        if token is not None:
+            if token:
+                store_token(config, provider_id, token)
+            else:
+                remove_token(config, provider_id)
         save(updated)
     except Exception as exc:
         if token is not None:
             try:
                 if previous is None:
-                    remove_token(config, provider_id)
+                    target.unlink(missing_ok=True)
                 else:
-                    store_token(config, provider_id, previous)
-            except Exception as rollback_exc:
-                raise ClaudapterError(f"Could not save settings, and restoring the API key also failed: {rollback_exc}") from exc
+                    atomic_bytes(target, previous)
+            except OSError:
+                raise ClaudapterError("Saving settings and restoring the API key failed. Check local storage permissions.") from exc
         raise
     config.providers = updated.providers
     config.default_provider = updated.default_provider
@@ -59,6 +75,7 @@ def serve(config: Config) -> int:
     token = secrets.token_urlsafe(32)
     requested_run: tuple[Provider, str, str] | None = None
     state_lock = threading.RLock()
+    guard = SettingsGuard(config.path or config_path())
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_args):
@@ -75,7 +92,7 @@ def serve(config: Config) -> int:
             self.wfile.write(body)
 
         def _authorized(self) -> bool:
-            return secrets.compare_digest(self.headers.get("X-Claudapter-Token", ""), token)
+            return local_request(self.headers, server.server_port) and secrets.compare_digest(self.headers.get("X-Claudapter-Token", ""), token)
 
         def _body(self) -> dict:
             try:
@@ -84,7 +101,7 @@ def serve(config: Config) -> int:
                     raise ValueError("Invalid request size")
                 body = json.loads(self.rfile.read(size))
                 if not isinstance(body, dict):
-                    raise ValueError("Expected a JSON object")
+                    raise ClaudapterError("Request body must be a JSON object.")
                 return body
             except (ValueError, json.JSONDecodeError) as exc:
                 raise ClaudapterError("Invalid JSON request.") from exc
@@ -96,6 +113,9 @@ def serve(config: Config) -> int:
             return provider
 
         def do_GET(self):
+            if not local_request(self.headers, server.server_port):
+                self._json({"error": "Setup is local-only."}, HTTPStatus.FORBIDDEN)
+                return
             parsed = urlsplit(self.path)
             if parsed.path == "/":
                 supplied = parse_qs(parsed.query).get("token", [""])[0]
@@ -153,6 +173,17 @@ def serve(config: Config) -> int:
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
 
         def do_POST(self):
+            if not self._authorized():
+                self._json({"error": "Unauthorized"}, HTTPStatus.FORBIDDEN)
+                return
+            try:
+                self.connection.settimeout(15)
+                with state_lock, guard.edit():
+                    self._post()
+            except (OSError, ValueError):
+                self._json({"error": "Could not save settings. Reopen setup if settings changed elsewhere; check local storage permissions."}, HTTPStatus.BAD_REQUEST)
+
+        def _post(self):
             nonlocal requested_run
             if not self._authorized():
                 self._json({"error": "Unauthorized"}, HTTPStatus.FORBIDDEN)
@@ -185,6 +216,7 @@ def serve(config: Config) -> int:
                     upstream_reasoning = str(body.get("upstream_reasoning", old_provider.upstream_reasoning if old_provider else "provider_default"))
                     capabilities_file, require_verified = validate_capability_settings(body.get("capabilities_file", old_provider.capabilities_file if old_provider else ""), body.get("require_verified_capabilities", old_provider.require_verified_capabilities if old_provider else False), execution_mode)
                     provider = Provider(provider_id, display_name, validate_base_url(str(body.get("base_url", "")), protocol), mode, default_model, execution_mode, protocol, upstream_reasoning, capabilities_file, require_verified)
+                    provider.gateway_limits = validate_gateway_limits(body.get("gateway_limits", old_provider.gateway_limits if old_provider else {}), execution_mode)
                     updated = copy.deepcopy(config)
                     updated.providers[provider_id] = provider
                     persist_provider_change(config, updated, provider_id, str(body["api_key"]) if body.get("api_key") else None)
@@ -222,6 +254,16 @@ def serve(config: Config) -> int:
                 state_lock.release()
 
         def do_DELETE(self):
+            if not self._authorized():
+                self._json({"error": "Unauthorized"}, HTTPStatus.FORBIDDEN)
+                return
+            try:
+                with state_lock, guard.edit():
+                    self._delete()
+            except (OSError, ValueError):
+                self._json({"error": "Could not remove provider. Reopen setup if settings changed elsewhere."}, HTTPStatus.BAD_REQUEST)
+
+        def _delete(self):
             if not self._authorized():
                 self._json({"error": "Unauthorized"}, HTTPStatus.FORBIDDEN)
                 return

@@ -5,9 +5,9 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
-from unittest.mock import patch
 
 from claudapter.config import Config, Provider, load
 from claudapter.credentials import get_token, store_token
@@ -19,9 +19,8 @@ class WebTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             config = Config(path=Path(directory) / "config.toml")
             updated = Config({"demo": Provider("demo", "Demo", "https://gateway.test")}, path=config.path)
-            with patch("claudapter.web.store_token", side_effect=OSError("disk failure")):
-                with self.assertRaises(OSError):
-                    persist_provider_change(config, updated, "demo", "new-secret")
+            with patch("claudapter.web.store_token", side_effect=OSError("disk failure")), self.assertRaises(OSError):
+                persist_provider_change(config, updated, "demo", "new-secret")
             self.assertEqual(config.providers, {})
             self.assertFalse(config.path.exists())
 
@@ -31,14 +30,12 @@ class WebTests(unittest.TestCase):
             config = Config({"demo": old}, path=Path(directory) / "config.toml")
             store_token(config, "demo", "old-secret")
             updated = Config({"demo": Provider("demo", "New", "https://gateway.test")}, path=config.path)
-            with patch("claudapter.web.save", side_effect=OSError("disk failure")):
-                with self.assertRaises(OSError):
-                    persist_provider_change(config, updated, "demo", "new-secret")
+            with patch("claudapter.web.save", side_effect=OSError("disk failure")), self.assertRaises(OSError):
+                persist_provider_change(config, updated, "demo", "new-secret")
             self.assertEqual(config.providers["demo"].display_name, "Old")
             self.assertEqual(get_token(config, "demo"), "old-secret")
-            with patch("claudapter.web.save", side_effect=OSError("disk failure")):
-                with self.assertRaises(OSError):
-                    persist_provider_change(config, Config(path=config.path), "demo", "")
+            with patch("claudapter.web.save", side_effect=OSError("disk failure")), self.assertRaises(OSError):
+                persist_provider_change(config, Config(path=config.path), "demo", "")
             self.assertIn("demo", config.providers)
             self.assertEqual(get_token(config, "demo"), "old-secret")
 

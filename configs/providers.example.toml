@@ -17,6 +17,8 @@ execution_mode = "direct" # direct or gateway
 # Optional capability checks require execution_mode = "gateway".
 # capabilities_file = "capabilities.json" # relative to this config file
 # require_verified_capabilities = true
+# Optional runtime overrides also require gateway mode; omitted values use defaults.
+# gateway_limits = { total_timeout = 600, progress_timeout = 120, max_stream_bytes = 33554432 }
 
 # A translated provider uses the exact API prefix, including its version.
 # [[providers]]
