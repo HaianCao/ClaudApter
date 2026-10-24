@@ -8,13 +8,15 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from .config import Config, Provider, cache_path
+from .config import Config, Provider, cache_path, claude_base_url
 from .credentials import get_token
 from .errors import ClaudapterError
 
 
 def _url(provider: Provider, suffix: str) -> str:
-    if provider.protocol != "messages" and suffix.startswith("/v1/"):
+    if provider.protocol == "messages":
+        return claude_base_url(provider.base_url) + suffix
+    if suffix.startswith("/v1/"):
         suffix = suffix[3:]
     return provider.base_url.rstrip("/") + suffix
 

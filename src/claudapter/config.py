@@ -90,10 +90,14 @@ def validate_base_url(value: str, protocol: str = "messages") -> str:
     if re.search(r"\s", value) or (parsed.scheme != "https" and not local_http) or not hostname or parsed.username is not None or parsed.password is not None or parsed.query or parsed.fragment or (port is not None and port < 1):
         raise ClaudapterError("Base URL must use HTTPS (or loopback HTTP) without credentials, query or fragment.")
     if parsed.path.endswith(("/messages", "/responses", "/chat/completions")):
-        raise ClaudapterError("Enter the base URL without the endpoint suffix.")
-    if protocol == "messages" and parsed.path.endswith("/v1"):
-        raise ClaudapterError("Enter the gateway base URL before /v1; Claude Code appends /v1/messages itself.")
+        raise ClaudapterError("Enter the base URL, for example https://provider.example/v1, without the endpoint suffix.")
     return value
+
+
+def claude_base_url(value: str) -> str:
+    """Accept the API prefix users copy; Claude appends /v1/messages itself."""
+    value = validate_base_url(value)
+    return value[:-3] if urlsplit(value).path.endswith("/v1") else value
 
 
 def validate(config: Config) -> None:

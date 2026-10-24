@@ -10,6 +10,7 @@ from .config import (
     EFFORTS,
     Config,
     Provider,
+    claude_base_url,
     config_path,
     secret_var,
     validate_capability_settings,
@@ -60,7 +61,7 @@ def build_invocation(config: Config, provider: Provider, model: str, effort: str
         env.pop(secret_var(provider.id), None)
         _bypass_loopback_proxy(env)
     else:
-        env["ANTHROPIC_BASE_URL"] = provider.base_url
+        env["ANTHROPIC_BASE_URL"] = claude_base_url(provider.base_url)
         env["ANTHROPIC_AUTH_TOKEN" if provider.auth_mode == "bearer" else "ANTHROPIC_API_KEY"] = token
     args = [executable, "--model", model]
     if cross_protocol:
@@ -92,7 +93,7 @@ def _gateway(config: Config, provider: Provider):
         raise ClaudapterError("Gateway mode needs a compatible Protoverta build installed in this Python environment.") from exc
     try:
         upstream = Protocol(provider.protocol)
-        base_url = provider.base_url.rstrip("/") + ("/v1" if upstream == Protocol.MESSAGES else "")
+        base_url = (claude_base_url(provider.base_url) + "/v1" if upstream == Protocol.MESSAGES else provider.base_url.rstrip("/"))
         options = {} if upstream == Protocol.MESSAGES else {"client_profile": "claude", "messages_usage_policy": "deferred"}
         options.update(validate_gateway_limits(provider.gateway_limits, provider.execution_mode))
         capabilities_file, required = validate_capability_settings(provider.capabilities_file, provider.require_verified_capabilities, provider.execution_mode)

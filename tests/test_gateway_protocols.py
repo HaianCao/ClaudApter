@@ -56,7 +56,8 @@ def test_loopback_proxy_bypass_does_not_change_parent_or_direct_mode(tmp_path):
 
 
 @pytest.mark.parametrize("protocol", ["messages", "chat", "responses"])
-def test_gateway_passes_explicit_prefix_and_compatibility_policy(tmp_path, protocol):
+@pytest.mark.parametrize("prefix", ["/api", "/api/v1", "/api/v1/"])
+def test_gateway_passes_explicit_prefix_and_compatibility_policy(tmp_path, protocol, prefix):
     class Protocol(StrEnum):
         MESSAGES = "messages"
         CHAT = "chat"
@@ -72,11 +73,14 @@ def test_gateway_passes_explicit_prefix_and_compatibility_policy(tmp_path, proto
     core.Protocol = Protocol
     server = types.ModuleType("protoverta.server")
     server.GatewayConfig, server.gateway_session = gateway_config, lambda value: value
-    provider = Provider("demo", "Demo", "https://example.test/api", execution_mode="gateway", protocol=protocol)
+    provider = Provider("demo", "Demo", "https://example.test" + prefix, execution_mode="gateway", protocol=protocol)
     config = Config({"demo": provider}, path=tmp_path / "config.toml")
     with patch.dict(sys.modules, {"protoverta.core": core, "protoverta.server": server}), patch("claudapter.launcher.get_token", return_value="secret"):
         _gateway(config, provider)
-    assert captured["args"][1] == "https://example.test/api" + ("/v1" if protocol == "messages" else "")
+    expected = "https://example.test" + prefix.rstrip("/")
+    if protocol == "messages" and not expected.endswith("/v1"):
+        expected += "/v1"
+    assert captured["args"][1] == expected
     assert captured["options"] == ({"upstream_reasoning": "provider_default"} if protocol == "messages" else {"client_profile": "claude", "messages_usage_policy": "deferred", "upstream_reasoning": "provider_default"})
 
 
