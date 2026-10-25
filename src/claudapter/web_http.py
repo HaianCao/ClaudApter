@@ -114,4 +114,3 @@ class SetupHTTPServer(ThreadingHTTPServer):
                 connection.shutdown(socket.SHUT_RDWR)
             except OSError:
                 pass
-
