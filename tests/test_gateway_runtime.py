@@ -18,7 +18,7 @@ def test_invalid_runtime_policies_are_rejected(value):
 def test_runtime_config_round_trip_and_paths_are_relative_to_config_not_cwd(tmp_path):
     protocol = "chat"
     provider = Provider("demo", "Demo", "https://example.test/v1", protocol=protocol, execution_mode="gateway")
-    provider.gateway_runtime = {"shared_admission_db": "budget.sqlite", "shared_requests": 10, "shared_concurrency": 2, "retry_attempts": 2}
+    provider.gateway_runtime = {"shared_admission_db": "budget.sqlite", "shared_requests": 10, "shared_concurrency": 2, "retry_attempts": 2, "catalog_policy_file": "catalog.json", "context_preflight": "estimate", "require_verified_routes": False}
     config = Config(providers={"demo": provider}, path=tmp_path / "config.toml")
     save(config)
     restored = load(config.path).providers["demo"]

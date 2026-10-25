@@ -88,8 +88,10 @@ def test_gateway_passes_explicit_prefix_and_compatibility_policy(tmp_path, proto
 def test_discovery_does_not_send_anthropic_query_or_headers(tmp_path, protocol):
     provider = Provider("demo", "Demo", "https://example.test/api/v4", execution_mode="gateway", protocol=protocol)
     config = Config({"demo": provider}, path=tmp_path / "config.toml")
-    with patch("claudapter.catalog.get_token", return_value="fake"), patch("claudapter.catalog.request_json", return_value={"data": [{"id": "m", "name": "Readable model"}]}) as request:
+    from protoverta.discovery import ModelInfo
+
+    with patch("claudapter.catalog.get_token", return_value="fake"), patch("protoverta.discovery.fetch_catalog", return_value=(ModelInfo("m", "Readable model"),)) as request:
         assert fetch_models(config, provider) == [{"id": "m", "display_name": "Readable model"}]
-    outgoing = request.call_args.args[0]
-    assert outgoing.full_url == "https://example.test/api/v4/models"
-    assert "anthropic-version" not in {key.lower() for key in outgoing.headers}
+    assert request.call_args.args[0] == "https://example.test/api/v4"
+    assert request.call_args.args[2].path == "/models"
+    assert "anthropic-version" not in {key.lower() for key in request.call_args.args[1]}

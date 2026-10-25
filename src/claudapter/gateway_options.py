@@ -27,16 +27,22 @@ def limits_toml(value):
 
 
 def validate_gateway_runtime(value, mode):
-    paths = {"shared_admission_db", "provider_profiles_file"}
+    paths = {"shared_admission_db", "provider_profiles_file", "catalog_policy_file"}
     counts = {"shared_requests", "shared_concurrency", "retry_attempts"}
     times = {"shared_window", "retry_max_wait"}
-    if not isinstance(value, dict) or set(value) - paths - counts - times:
+    flags = {"require_verified_routes"}
+    choices = {"context_preflight"}
+    if not isinstance(value, dict) or set(value) - paths - counts - times - flags - choices:
         raise ClaudapterError("Unknown gateway runtime policy.")
     if value and mode != "gateway":
         raise ClaudapterError("Runtime policies require gateway mode.")
     for key, option in value.items():
         if key in paths:
             valid = isinstance(option, str) and bool(option.strip()) and "\0" not in option
+        elif key in flags:
+            valid = type(option) is bool
+        elif key in choices:
+            valid = isinstance(option, str) and option in ("off", "estimate", "reject_estimate")
         elif key in counts:
             valid = type(option) is int and option > 0 and (key != "retry_attempts" or option <= 4)
         else:
@@ -54,7 +60,7 @@ def runtime_toml(value):
 
 def runtime_options(value, mode, config_file):
     options = validate_gateway_runtime(value, mode)
-    for key in ("shared_admission_db", "provider_profiles_file"):
+    for key in ("shared_admission_db", "provider_profiles_file", "catalog_policy_file"):
         if key in options:
             path = Path(options[key]).expanduser()
             options[key] = str(path.resolve() if path.is_absolute() else (config_file.resolve().parent / path).resolve())
@@ -62,4 +68,5 @@ def runtime_options(value, mode, config_file):
         from protoverta.provider_profiles import ProviderProfiles
 
         options["provider_profiles"] = ProviderProfiles.load(options.pop("provider_profiles_file"))
+    options.pop("catalog_policy_file", None)  # Used by discovery, not model inference.
     return options
