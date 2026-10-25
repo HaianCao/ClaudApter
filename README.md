@@ -149,6 +149,12 @@ To test an unpublished gateway build, pass `-ProtovertaWheel PATH_TO_WHEEL` to t
 
 Installer smoke tests can pass `-NoPathChanges` to install and uninstall scripts. Redirect `APPDATA` and `LOCALAPPDATA` in a disposable child shell as well: the flag alone does not isolate installation or user data paths.
 
+## Gateway checks and diagnostics
+
+Gateway previews provide route checks through `claude-ca doctor -p PROVIDER -m MODEL --allow-live --check text --check streaming --report NEW_REPORT.json`.
+These checks may incur provider charges; without `--allow-live`, gateway doctor makes no provider requests.
+Advanced setup can enable local session diagnostics, counting policies and evidence freshness checks. Diagnostics omit prompts and keys; reopen setup to view the last session report.
+
 ## License
 
 ClaudApter is licensed under the [MIT License](LICENSE).

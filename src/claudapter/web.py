@@ -6,7 +6,6 @@ import secrets
 import threading
 import webbrowser
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -27,7 +26,9 @@ from .errors import ClaudapterError
 from .gateway_options import validate_gateway_limits, validate_gateway_runtime
 from .launcher import launch, preflight
 from .settings_store import SettingsGuard, atomic_bytes
-from .web_security import local_request
+from .web_http import SetupHTTPServer as ThreadingHTTPServer
+from .web_http import SetupRequestHandler as BaseHTTPRequestHandler
+from .web_security import local_request, token_matches
 
 _HTML = Path(__file__).with_name("web_template.html").read_text(encoding="utf-8")
 
@@ -93,7 +94,7 @@ def serve(config: Config) -> int:
             self.wfile.write(body)
 
         def _authorized(self) -> bool:
-            return local_request(self.headers, server.server_port) and secrets.compare_digest(self.headers.get("X-Claudapter-Token", ""), token)
+            return local_request(self.headers, server.server_port) and token_matches(self.headers.get("X-Claudapter-Token", ""), token)
 
         def _body(self) -> dict:
             try:
@@ -120,7 +121,7 @@ def serve(config: Config) -> int:
             parsed = urlsplit(self.path)
             if parsed.path == "/":
                 supplied = parse_qs(parsed.query).get("token", [""])[0]
-                if not secrets.compare_digest(supplied, token):
+                if not token_matches(supplied, token):
                     self._json({"error": "Unauthorized"}, HTTPStatus.FORBIDDEN)
                     return
                 page = _HTML.replace("__SESSION_TOKEN__", token).encode("utf-8")
@@ -166,6 +167,11 @@ def serve(config: Config) -> int:
                 if parsed.path == "/api/config":
                     with state_lock:
                         self._json(public_config(config))
+                elif parsed.path == "/api/diagnostics":
+                    from .gateway_options import diagnostic_report
+
+                    provider = self._provider(parse_qs(parsed.query).get("provider", [""])[0])
+                    self._json(diagnostic_report(config.path or config_path(), provider))
                 elif parsed.path == "/api/models":
                     with state_lock:
                         provider = self._provider(parse_qs(parsed.query).get("provider", [""])[0])
@@ -184,6 +190,8 @@ def serve(config: Config) -> int:
                 self.connection.settimeout(15)
                 with state_lock, guard.edit():
                     self._post()
+            except TimeoutError:
+                self._json({"error": "Setup request timed out."}, HTTPStatus.REQUEST_TIMEOUT)
             except (OSError, ValueError):
                 self._json({"error": "Could not save settings. Reopen setup if settings changed elsewhere; check local storage permissions."}, HTTPStatus.BAD_REQUEST)
 
@@ -200,6 +208,8 @@ def serve(config: Config) -> int:
                         provider = self._provider(str(body.get("provider", "")))
                     self._json({"models": fetch_models(config, provider)})
                     return
+            except TimeoutError:
+                raise  # Body reads belong to the outer 408 boundary.
             except (ClaudapterError, OSError) as exc:
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
                 return
@@ -253,6 +263,8 @@ def serve(config: Config) -> int:
                     threading.Thread(target=server.shutdown, daemon=True).start()
                     return
                 self._json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
+            except TimeoutError:
+                raise  # The outer POST boundary sends the shared 408 contract.
             except (ClaudapterError, OSError) as exc:
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             finally:

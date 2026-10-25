@@ -1,8 +1,14 @@
 """Authority and origin checks for the ephemeral loopback setup server."""
 
+import secrets
 from urllib.parse import urlsplit
 
 _HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+
+def token_matches(value, expected):
+    """Malformed input is unauthorized, never a compare_digest TypeError."""
+    return isinstance(value, str) and isinstance(expected, str) and bool(expected) and value.isascii() and expected.isascii() and secrets.compare_digest(value, expected)
 
 
 def local_request(headers, port: int) -> bool:

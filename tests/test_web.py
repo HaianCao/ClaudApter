@@ -78,6 +78,13 @@ class WebTests(unittest.TestCase):
                         self.assertIn("img-src 'self'", response.headers.get("Content-Security-Policy", ""))
                         page = response.read().decode()
                     token = re.search(r"const TOKEN='([^']+)'", page).group(1)
+                    with self.assertRaises(HTTPError) as unauthorized:
+                        urlopen(url.split("?", 1)[0] + "api/diagnostics?provider=demo", timeout=5)
+                    self.assertEqual(unauthorized.exception.code, 403)
+                    unauthorized.exception.close()
+                    diagnostic_request = Request(url.split("?", 1)[0] + "api/diagnostics?provider=demo", headers={"X-Claudapter-Token": token})
+                    with urlopen(diagnostic_request, timeout=5) as response:
+                        self.assertEqual(json.load(response), {"records": [], "enabled": False})
                     for extra_fields in ({"upstream_reasoning": "openrouter_disabled", "capabilities_file": "checks.json", "require_verified_capabilities": True}, {}):
                         edit = Request(url.split("?", 1)[0] + "api/provider", data=json.dumps({"id": "demo", "display_name": "Demo renamed", "base_url": "https://gateway.test", "execution_mode": "gateway", **extra_fields}).encode(), headers={"Content-Type": "application/json", "X-Claudapter-Token": token}, method="POST")
                         with urlopen(edit, timeout=5) as response:

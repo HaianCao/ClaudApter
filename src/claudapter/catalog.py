@@ -68,9 +68,12 @@ def request_json(request: urllib.request.Request, timeout: float = 12) -> dict:
 
 
 def _identity(config, provider):
+    from .gateway_options import catalog_policy_fingerprint
+
     return {"base_url": provider.base_url, "protocol": provider.protocol, "auth_mode": provider.auth_mode,
             "credential_fingerprint": hashlib.sha256((get_token(config, provider.id) or "").encode()).hexdigest(),
-            "catalog_policy_file": provider.gateway_runtime.get("catalog_policy_file", "")}
+            "catalog_policy_file": provider.gateway_runtime.get("catalog_policy_file", ""),
+            "catalog_policy_fingerprint": catalog_policy_fingerprint(config.path, provider)}
 
 
 def _gateway_models(config, provider):

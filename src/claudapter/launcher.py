@@ -17,7 +17,7 @@ from .config import (
 )
 from .credentials import get_token
 from .errors import ClaudapterError
-from .gateway_options import runtime_options, validate_gateway_limits
+from .gateway_options import runtime_options, session_options, validate_gateway_limits
 
 
 def _bypass_loopback_proxy(env: dict[str, str]) -> None:
@@ -122,10 +122,11 @@ def _verify_capabilities(gateway, model: str, effort: str) -> None:
         report = registry.assess(gateway.upstream_base_url, gateway.upstream_protocol, model, features)
         report.require(verified=gateway.require_verified_capabilities)
         from protoverta.capabilities import route_policies
+        from protoverta.evidence_identity import evidence_options
 
         registry.assess_route(gateway.upstream_base_url, gateway.upstream_protocol, model, features,
                               source_protocol="messages", streaming=True, client_profile=gateway.client_profile,
-                              policies=route_policies(gateway)).require(verified=gateway.require_verified_routes)
+                              policies=route_policies(gateway), **evidence_options(gateway)).require(verified=gateway.require_verified_routes or gateway.require_current_evidence or gateway.evidence_max_age_days is not None)
     except ValueError as exc:
         raise ClaudapterError(f"Model compatibility check failed: {exc}") from exc
 
@@ -144,7 +145,7 @@ def launch(config: Config, provider: Provider, model: str, effort: str, extra: l
         if provider.execution_mode == "gateway":
             gateway, gateway_session = _gateway(config, provider)
             _verify_capabilities(gateway, model, effort)
-            with gateway_session(gateway) as origin:
+            with session_options(config.path or config_path(), provider) as observer_options, gateway_session(gateway, **observer_options) as origin:
                 args, env = build_invocation(config, provider, model, effort, extra, mode, gateway_url=origin, gateway_token=gateway.inbound_token)
                 return subprocess.run(args, env=env, check=False).returncode
         args, env = build_invocation(config, provider, model, effort, extra, mode)

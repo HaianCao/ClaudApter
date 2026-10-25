@@ -32,6 +32,9 @@ def main(argv: list[str] | None = None) -> int:
     doctor = sub.add_parser("doctor", help="Probe an Anthropic Messages endpoint (may incur API cost)")
     doctor.add_argument("-p", "--provider", required=True)
     doctor.add_argument("-m", "--model", required=True)
+    doctor.add_argument("--allow-live", action="store_true", help="Allow bounded provider route checks (may incur cost)")
+    doctor.add_argument("--check", action="append", choices=["text", "streaming", "tools", "streaming_tools", "tool_result", "history_replay"])
+    doctor.add_argument("--report", help="Write positive route evidence to a new JSON file")
     sub.add_parser("validate", help="Validate ClaudApter configuration")
     args = parser.parse_args(argv)
     try:
@@ -51,7 +54,15 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{item['id']}\t{item['display_name']}")
             return 0
         if args.command == "doctor":
-            probe_messages(config, _provider(config, args.provider), args.model)
+            provider = _provider(config, args.provider)
+            if provider.execution_mode == "gateway" or args.check or args.report:
+                from .route_doctor import route_doctor
+
+                checks = route_doctor(config, provider, args.model, allow_live=args.allow_live, checks=args.check, report=args.report)
+                for item in checks:
+                    print(f"{item['case']}: {item['outcome']} ({item['requests']} requests, {item['duration_ms']} ms)")
+                return 0 if all(item["passed"] for item in checks) else 1
+            probe_messages(config, provider, args.model)
             print("Messages probe passed. Streaming and tool calls are not yet verified.")
             return 0
         mode = args.command or "run"

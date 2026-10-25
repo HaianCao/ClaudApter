@@ -2,6 +2,7 @@
 
 import json
 import math
+import re
 from pathlib import Path
 
 from .errors import ClaudapterError
@@ -27,12 +28,13 @@ def limits_toml(value):
 
 
 def validate_gateway_runtime(value, mode):
-    paths = {"shared_admission_db", "provider_profiles_file", "catalog_policy_file"}
-    counts = {"shared_requests", "shared_concurrency", "retry_attempts"}
+    paths = {"shared_admission_db", "provider_profiles_file", "catalog_policy_file", "diagnostics_dir"}
+    counts = {"shared_requests", "shared_concurrency", "retry_attempts", "evidence_max_age_days"}
     times = {"shared_window", "retry_max_wait"}
-    flags = {"require_verified_routes"}
-    choices = {"context_preflight"}
-    if not isinstance(value, dict) or set(value) - paths - counts - times - flags - choices:
+    flags = {"require_verified_routes", "require_current_evidence"}
+    choices = {"context_preflight", "token_count_mode", "prompt_caching"}
+    labels = {"openrouter_provider"}
+    if not isinstance(value, dict) or set(value) - paths - counts - times - flags - choices - labels:
         raise ClaudapterError("Unknown gateway runtime policy.")
     if value and mode != "gateway":
         raise ClaudapterError("Runtime policies require gateway mode.")
@@ -41,8 +43,10 @@ def validate_gateway_runtime(value, mode):
             valid = isinstance(option, str) and bool(option.strip()) and "\0" not in option
         elif key in flags:
             valid = type(option) is bool
+        elif key in labels:
+            valid = isinstance(option, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_./:-]{0,127}", option) is not None
         elif key in choices:
-            valid = isinstance(option, str) and option in ("off", "estimate", "reject_estimate")
+            valid = isinstance(option, str) and option in (("off", "ephemeral") if key == "prompt_caching" else ("off", "estimate", "native") if key == "token_count_mode" else ("off", "estimate", "reject_estimate"))
         elif key in counts:
             valid = type(option) is int and option > 0 and (key != "retry_attempts" or option <= 4)
         else:
@@ -55,7 +59,7 @@ def validate_gateway_runtime(value, mode):
 
 
 def runtime_toml(value):
-    return "{ " + ", ".join(key + " = " + json.dumps(option) for key, option in sorted(value.items())) + " }"
+    return "{ " + ", ".join(key + " = " + json.dumps(option, ensure_ascii=False) for key, option in sorted(value.items())) + " }"
 
 
 def runtime_options(value, mode, config_file):
@@ -69,4 +73,66 @@ def runtime_options(value, mode, config_file):
 
         options["provider_profiles"] = ProviderProfiles.load(options.pop("provider_profiles_file"))
     options.pop("catalog_policy_file", None)  # Used by discovery, not model inference.
+    options.pop("diagnostics_dir", None)
     return options
+
+
+def diagnostics_path(config_file, provider):
+    value = provider.gateway_runtime.get("diagnostics_dir")
+    if not value:
+        return None
+    path = Path(value).expanduser()
+    root = path.resolve() if path.is_absolute() else (config_file.resolve().parent / path).resolve()
+    return root / provider.id
+
+
+def diagnostic_report(config_file, provider):
+    path = diagnostics_path(config_file, provider)
+    if path is None:
+        return {"records": [], "enabled": False}
+    try:
+        from protoverta.session_diagnostics import latest_diagnostics
+
+        return latest_diagnostics(path) | {"enabled": True}
+    except (ImportError, OSError, ValueError):
+        return {"records": [], "enabled": True, "unavailable": True}
+
+
+def catalog_policy_fingerprint(config_file, provider):
+    value = provider.gateway_runtime.get("catalog_policy_file")
+    if not value:
+        return ""
+    if config_file is None:
+        return "unresolved"
+    import hashlib
+
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = config_file.resolve().parent / path
+    try:
+        with path.open("rb") as stream:
+            content = stream.read(65537)
+        return hashlib.sha256(content).hexdigest() if len(content) <= 65536 else "invalid"
+    except OSError:
+        return "unavailable"
+
+
+def session_options(config_file, provider):
+    from contextlib import ExitStack, contextmanager
+
+    @contextmanager
+    def options():
+        path = diagnostics_path(config_file, provider)
+        if path is None:
+            yield {}
+        else:
+            from protoverta.session_diagnostics import diagnostic_journal
+
+            with ExitStack() as stack:
+                try:
+                    observer = stack.enter_context(diagnostic_journal(path))
+                except OSError:
+                    yield {}  # Optional diagnostics cannot prevent CLI startup.
+                else:
+                    yield {"observer": observer}
+    return options()
