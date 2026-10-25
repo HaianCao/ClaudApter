@@ -105,6 +105,8 @@ def serve(config: Config) -> int:
                 if not isinstance(body, dict):
                     raise ClaudapterError("Request body must be a JSON object.")
                 return body
+            except RecursionError:
+                raise ClaudapterError("JSON request nesting is too deep.") from None
             except (ValueError, json.JSONDecodeError) as exc:
                 raise ClaudapterError("Invalid JSON request.") from exc
 

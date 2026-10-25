@@ -1,12 +1,13 @@
 """Actual setup listener regressions; synthetic configuration and no provider IO."""
 
+import json
 import queue
 import socket
 import subprocess
 import sys
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, quote, urlsplit
@@ -133,3 +134,42 @@ sys.meta_path.insert(0,Block())
 import claudapter.web
 """
     subprocess.run([sys.executable, "-c", code], check=True, timeout=15)
+
+
+@pytest.mark.parametrize("force_decoder_error", [False, True])
+def test_deep_json_returns_400_without_mutation_and_valid_post_recovers(tmp_path, monkeypatch, force_decoder_error):
+    with listener(tmp_path, monkeypatch) as (_, url, token, _):
+        headers = {"X-Claudapter-Token": token, "Content-Type": "application/json"}
+
+        def state():
+            with urlopen(Request(f"http://{url.netloc}/api/config", headers=headers), timeout=2) as response:
+                return json.load(response)
+
+        def files():
+            return {name: (tmp_path / name).read_bytes() if (tmp_path / name).exists() else None for name in ("config.toml", ".env")}
+
+        before, saved = state(), files()
+        # Valid JSON below the body byte cap, but beyond the decoder's nesting.
+        data = b'{"x":' + b"[" * 4000 + b"0" + b"]" * 4000 + b"}"
+        assert len(data) < 64000
+        try:
+            json.loads(data)
+            actual_overflow = False
+        except RecursionError:
+            actual_overflow = True
+        # Decoder stack limits vary by OS/Python. Also inject the exception so
+        # this boundary contract is exercised even where this payload parses.
+        decoder = patch.object(web.json, "loads", side_effect=RecursionError("private decoder detail")) if force_decoder_error else nullcontext()
+        with decoder, pytest.raises(HTTPError) as error:
+            urlopen(Request(f"http://{url.netloc}/api/provider", data=data, headers=headers), timeout=2)
+        with error.value as response:
+            assert response.code == 400
+            result = json.load(response)
+            if force_decoder_error or actual_overflow:
+                assert result == {"error": "JSON request nesting is too deep."}
+        assert state() == before and files() == saved
+
+        valid = {"id": "fixture", "display_name": "Fixture", "base_url": "https://example.invalid/v1"}
+        with urlopen(Request(f"http://{url.netloc}/api/provider", data=json.dumps(valid).encode(), headers=headers), timeout=2) as response:
+            assert response.status == 200
+        assert [provider["id"] for provider in state()["providers"]] == ["fixture"]
