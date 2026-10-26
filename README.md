@@ -47,6 +47,8 @@ claude-ca setup
 
 The setup page opens in your browser. Add a provider, enter its API key, refresh the model list or type a model ID, then choose your default model and effort level. Setup is opened only when you run `claude-ca setup`.
 
+Windows supports native CLI executables and standard npm global or project installations. Custom batch-wrapper behavior is not supported; use an official CLI installation if the launcher cannot resolve it safely.
+
 ## Configure a provider
 
 In the setup page:

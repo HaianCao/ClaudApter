@@ -6,6 +6,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from .command import command_prefix
 from .config import (
     EFFORTS,
     Config,
@@ -43,6 +44,10 @@ def build_invocation(config: Config, provider: Provider, model: str, effort: str
     executable = shutil.which("claude")
     if not executable:
         raise ClaudapterError("Claude Code CLI was not found on PATH. Install it and verify with: claude --version")
+    try:
+        prefix = command_prefix(executable, "claude", "@anthropic-ai/claude-code")
+    except ValueError as exc:
+        raise ClaudapterError(str(exc)) from None
     token = get_token(config, provider.id)
     if not token:
         raise ClaudapterError(f"No API key is saved for {provider.display_name}.")
@@ -63,7 +68,7 @@ def build_invocation(config: Config, provider: Provider, model: str, effort: str
     else:
         env["ANTHROPIC_BASE_URL"] = claude_base_url(provider.base_url)
         env["ANTHROPIC_AUTH_TOKEN" if provider.auth_mode == "bearer" else "ANTHROPIC_API_KEY"] = token
-    args = [executable, "--model", model]
+    args = [*prefix, "--model", model]
     if cross_protocol:
         # Scope compatibility settings to this child process, never user files.
         env.update({"CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1", "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS": "1",
@@ -82,6 +87,8 @@ def build_invocation(config: Config, provider: Provider, model: str, effort: str
     elif mode != "run":
         raise ClaudapterError("Unsupported launch mode.")
     args += extra
+    if any(not isinstance(arg, str) or "\0" in arg for arg in args):
+        raise ClaudapterError("CLI arguments must be strings without NUL characters.")
     return args, env
 
 

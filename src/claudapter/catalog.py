@@ -8,6 +8,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from http.client import HTTPException
 from pathlib import Path
 
 from .config import Config, Provider, cache_path, claude_base_url
@@ -44,6 +45,15 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 _OPENER = urllib.request.build_opener(_NoRedirect())
 
 
+def _decode_json(raw):
+    try:
+        value = json.loads(raw)
+        json.dumps(value, ensure_ascii=False, allow_nan=False).encode("utf-8")
+    except (ValueError, TypeError, RecursionError):
+        raise ValueError("Invalid catalog JSON.") from None
+    return value
+
+
 def request_json(request: urllib.request.Request, timeout: float = 12) -> dict:
     try:
         with _OPENER.open(request, timeout=timeout) as response:
@@ -56,14 +66,14 @@ def request_json(request: urllib.request.Request, timeout: float = 12) -> dict:
             payload = response.read(8_000_001)
             if len(payload) > 8_000_000:
                 raise ClaudapterError("Provider response is too large.")
-            data = json.loads(payload)
+            data = _decode_json(payload)
             if not isinstance(data, dict):
                 raise ClaudapterError("Provider returned an invalid JSON object.")
             return data
     except urllib.error.HTTPError as exc:
         exc.close()
         raise ClaudapterError(f"Provider returned HTTP {exc.code}.") from None
-    except (urllib.error.URLError, TimeoutError, ValueError, UnicodeError) as exc:
+    except (urllib.error.URLError, OSError, ValueError, UnicodeError, RecursionError, HTTPException) as exc:
         raise ClaudapterError(f"Provider request failed: {type(exc).__name__}.") from None
 
 
@@ -127,7 +137,7 @@ def fetch_models(config: Config, provider: Provider) -> list[dict[str, str]]:
     try:
         path = cache_path(config)
         path.parent.mkdir(parents=True, exist_ok=True)
-        existing = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        existing = _decode_json(path.read_text(encoding="utf-8")) if path.exists() else {}
         if not isinstance(existing, dict):
             existing = {}
         existing[provider.id] = {"identity": _identity(config, provider), "saved_at": time.time(), "models": result, "model_info": gateway_info}
@@ -147,14 +157,14 @@ def fetch_models(config: Config, provider: Provider) -> list[dict[str, str]]:
 
 def cached_models(config: Config, provider: Provider) -> tuple[list[dict[str, str]], bool]:
     try:
-        data = json.loads(cache_path(config).read_text(encoding="utf-8"))
+        data = _decode_json(cache_path(config).read_text(encoding="utf-8"))
         entry = data.get(provider.id, {})
         if entry.get("identity") != _identity(config, provider) or not isinstance(entry.get("models"), list):
             return [], True
         if any(not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"] or not isinstance(item.get("display_name"), str) for item in entry["models"]):
             return [], True
         return entry["models"], time.time() - float(entry.get("saved_at", 0)) > 86_400
-    except (OSError, ValueError, TypeError, AttributeError):
+    except (OSError, ValueError, TypeError, AttributeError, RecursionError):
         return [], True
 
 
