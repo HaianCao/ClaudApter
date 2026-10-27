@@ -78,7 +78,8 @@ def validate_provider_id(value: str) -> str:
 def secret_names(provider_id: str) -> tuple[str, str]:
     """Keep adapter credentials out of Claude's native authentication namespace."""
     legacy = re.sub(r"[^A-Za-z0-9]", "_", validate_provider_id(provider_id)).upper() + "_TOKEN"
-    name = "CLAUDE_CA_PROVIDER_" + legacy if legacy.startswith(("ANTHROPIC_", "CLAUDE_CODE_")) else legacy
+    needs_namespace = legacy[0].isdigit() or legacy.startswith(("ANTHROPIC_", "CLAUDE_CODE_"))
+    name = "CLAUDE_CA_PROVIDER_" + legacy if needs_namespace else legacy
     return name, legacy
 
 

@@ -66,6 +66,30 @@ def test_non_ascii_query_and_header_are_unauthorized_not_handler_errors(tmp_path
             assert response.status == 200
 
 
+def test_numeric_provider_save_and_reload_keeps_setup_and_other_key_readable(tmp_path, monkeypatch):
+    from claudapter.config import load, secret_var
+    from claudapter.credentials import get_token
+
+    monkeypatch.delenv(secret_var("123"), raising=False)
+    monkeypatch.delenv(secret_var("other"), raising=False)
+    with listener(tmp_path, monkeypatch) as (_, url, token, _):
+        origin = f"http://{url.netloc}"
+        headers = {"X-Claudapter-Token": token, "Content-Type": "application/json"}
+        for provider_id in ("123", "other"):
+            body = {"id": provider_id, "display_name": "Fixture " + provider_id,
+                    "base_url": "https://example.test/v1", "api_key": "synthetic-" + provider_id}
+            with urlopen(Request(origin + "/api/provider", data=json.dumps(body).encode(), headers=headers), timeout=3) as response:
+                assert response.status == 200
+        with urlopen(Request(origin + "/api/config", headers=headers), timeout=3) as response:
+            assert {p["id"]: p["has_key"] for p in json.load(response)["providers"]} == {"123": True, "other": True}
+        config = load(tmp_path / "config.toml")
+        assert get_token(config, "123") == "synthetic-123"
+        assert get_token(config, "other") == "synthetic-other"
+
+    # Reconstruct setup's public state from the saved configuration.
+    assert {p["id"]: p["has_key"] for p in web.public_config(load(tmp_path / "config.toml"))["providers"]} == {"123": True, "other": True}
+
+
 def test_missing_mcp_variable_keeps_setup_open_and_does_not_save_defaults(tmp_path, monkeypatch):
     from claudapter import launcher
 
