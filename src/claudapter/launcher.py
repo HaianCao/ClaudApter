@@ -16,7 +16,7 @@ from .config import (
     secret_var,
     validate_capability_settings,
 )
-from .credentials import get_token
+from .credentials import get_token, validate_token
 from .errors import ClaudapterError
 from .gateway_options import runtime_options, session_options, validate_gateway_limits
 from .mcp import environment_references, load_servers, session_arguments
@@ -52,6 +52,7 @@ def build_invocation(config: Config, provider: Provider, model: str, effort: str
     token = get_token(config, provider.id)
     if not token:
         raise ClaudapterError(f"No API key is saved for {provider.display_name}.")
+    token = validate_token(token)
     if not model.strip():
         raise ClaudapterError("Choose a model or enter its exact model ID.")
     if effort not in EFFORTS:
@@ -122,7 +123,7 @@ def _gateway(config: Config, provider: Provider):
             from protoverta.automatic_reasoning import automatic_reasoning
 
             reasoning_policy, _ = automatic_reasoning("messages", upstream, base_url)
-        gateway = GatewayConfig(upstream, base_url, get_token(config, provider.id), secrets.token_urlsafe(32), "x-api-key" if provider.auth_mode == "api_key" else "bearer", upstream_reasoning=reasoning_policy, **options)
+        gateway = GatewayConfig(upstream, base_url, validate_token(get_token(config, provider.id)), secrets.token_urlsafe(32), "x-api-key" if provider.auth_mode == "api_key" else "bearer", upstream_reasoning=reasoning_policy, **options)
     except (ImportError, OSError, TypeError, ValueError) as exc:
         raise ClaudapterError(f"Invalid or incompatible Protoverta gateway configuration: {exc}") from exc
     return gateway, gateway_session

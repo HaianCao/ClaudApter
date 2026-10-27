@@ -90,6 +90,44 @@ def test_numeric_provider_save_and_reload_keeps_setup_and_other_key_readable(tmp
     assert {p["id"]: p["has_key"] for p in web.public_config(load(tmp_path / "config.toml"))["providers"]} == {"123": True, "other": True}
 
 
+def test_invalid_key_save_is_atomic_and_existing_bad_key_can_be_replaced(tmp_path, monkeypatch):
+    from claudapter import launcher
+
+    monkeypatch.setattr(launcher.shutil, "which", lambda _: "claude.exe")
+    with listener(tmp_path, monkeypatch) as (_, url, token, _):
+        origin = f"http://{url.netloc}"
+        headers = {"X-Claudapter-Token": token, "Content-Type": "application/json"}
+
+        def post(path, body):
+            return urlopen(Request(origin + path, data=json.dumps(body).encode(), headers=headers), timeout=3)
+
+        body = {"id": "fixture", "display_name": "Fixture", "base_url": "https://example.test/v1", "api_key": "synthetic-valid"}
+        with post("/api/provider", body) as response:
+            assert response.status == 200
+        files = [tmp_path / "config.toml", tmp_path / ".env"]
+        before = [path.read_bytes() for path in files]
+        with pytest.raises(HTTPError) as error:
+            post("/api/provider", {**body, "display_name": "Must not save", "api_key": "synthetic\0invalid"})
+        with error.value as response:
+            assert response.code == 400
+            assert json.load(response) == {"error": "API key cannot be empty or contain control characters."}
+        assert [path.read_bytes() for path in files] == before
+
+        # Simulate a key saved by an older version, without changing config.
+        files[1].write_text('FIXTURE_TOKEN="synthetic\\u0000invalid"\n')
+        with urlopen(Request(origin + "/api/config", headers=headers), timeout=3) as response:
+            assert response.status == 200
+        with patch.object(web, "launch") as launched, pytest.raises(HTTPError) as error:
+            post("/api/run", {"provider": "fixture", "model": "m", "effort": "default"})
+        with error.value as response:
+            assert response.code == 400
+            assert "control characters" in json.load(response)["error"]
+        launched.assert_not_called()
+        assert files[0].read_bytes() == before[0]
+        with post("/api/provider", body) as response:
+            assert response.status == 200
+
+
 def test_missing_mcp_variable_keeps_setup_open_and_does_not_save_defaults(tmp_path, monkeypatch):
     from claudapter import launcher
 

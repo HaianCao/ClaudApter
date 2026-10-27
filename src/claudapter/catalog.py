@@ -12,7 +12,7 @@ from http.client import HTTPException
 from pathlib import Path
 
 from .config import Config, Provider, cache_path, claude_base_url
-from .credentials import get_token
+from .credentials import get_token, validate_token
 from .errors import ClaudapterError
 
 
@@ -28,6 +28,7 @@ def _headers(config: Config, provider: Provider) -> dict[str, str]:
     token = get_token(config, provider.id)
     if not token:
         raise ClaudapterError(f"No API key is saved for {provider.display_name}.")
+    token = validate_token(token)
     headers = {"accept": "application/json"}
     if provider.protocol == "messages":
         headers["anthropic-version"] = "2023-06-01"

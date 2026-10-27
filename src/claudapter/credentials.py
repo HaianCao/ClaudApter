@@ -67,10 +67,15 @@ def _write(path: Path, values: dict[str, str]) -> None:
             temporary.unlink()
 
 
+def validate_token(token: str) -> str:
+    """Validate before persistence or use without including credentials in errors."""
+    if not isinstance(token, str) or not token.strip() or any(ord(char) < 32 or ord(char) == 127 for char in token):
+        raise ClaudapterError("API key cannot be empty or contain control characters.")
+    return token.strip()
+
+
 def store_token(config: Config, provider_id: str, token: str) -> None:
-    token = token.strip()
-    if not token or "\n" in token or "\r" in token:
-        raise ClaudapterError("API key cannot be empty or contain line breaks.")
+    token = validate_token(token)
     path = env_path(config)
     values = _read(path)
     name, legacy = secret_names(provider_id)
