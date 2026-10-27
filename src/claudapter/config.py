@@ -89,6 +89,8 @@ def secret_var(provider_id: str) -> str:
 
 def validate_base_url(value: str, protocol: str = "messages") -> str:
     _text(value, "base_url", required=True)
+    if any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in value):
+        raise ClaudapterError("Base URL must not contain whitespace or control characters.")
     value = value.strip().rstrip("/")
     try:
         parsed = urlsplit(value)
