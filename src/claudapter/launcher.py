@@ -57,14 +57,14 @@ def build_invocation(config: Config, provider: Provider, model: str, effort: str
     if effort not in EFFORTS:
         raise ClaudapterError("Invalid effort level.")
     env = os.environ.copy()
-    for name in ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_CUSTOM_HEADERS", "ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_MODEL", "CLAUDE_CODE_EFFORT_LEVEL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY", "CLAUDE_CODE_USE_AWS"):
+    for name in ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_CUSTOM_HEADERS", "ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_MODEL", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_SETUP_TOKEN", "CLAUDE_CODE_EFFORT_LEVEL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY", "CLAUDE_CODE_USE_AWS"):
         env.pop(name, None)
     if provider.execution_mode == "gateway":
         if not gateway_url or not gateway_token:
             raise ClaudapterError("Gateway mode requires a running local Protoverta gateway.")
+        env.pop(secret_var(provider.id), None)
         env["ANTHROPIC_BASE_URL"] = gateway_url
         env["ANTHROPIC_AUTH_TOKEN"] = gateway_token
-        env.pop(secret_var(provider.id), None)
         _bypass_loopback_proxy(env)
     else:
         env["ANTHROPIC_BASE_URL"] = claude_base_url(provider.base_url)

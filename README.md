@@ -132,7 +132,7 @@ These policies do not change direct mode or enable model fallback.
 
 ## Privacy and security
 
-Provider settings and API keys are stored on your computer. API keys are kept in a local `.env` file in plain text, so protect the file and never commit or share it. The setup page listens only on your own computer (`127.0.0.1`) and uses a per-session access token. Direct mode does not proxy conversations; optional gateway mode starts a temporary loopback Protoverta server and stops it when Claude Code exits.
+Provider settings and API keys are stored on your computer. API keys are kept in a local `.env` file in plain text, so protect the file and never commit or share it. Provider credentials are kept separate from Claude Code's own authentication. The setup page listens only on your own computer (`127.0.0.1`) and uses a per-session access token. Direct mode does not proxy conversations; optional gateway mode starts a temporary loopback Protoverta server and stops it when Claude Code exits.
 
 Gateway mode is experimental. Client interoperability is tested with scripted local upstreams; each real provider/model still needs its own compatibility check. Gateway mode passes a temporary local credential to Claude Code and keeps the provider key in the launcher.
 

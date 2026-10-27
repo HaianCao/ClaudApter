@@ -6,7 +6,7 @@ import re
 import tempfile
 from pathlib import Path
 
-from .config import Config, config_path, secret_var
+from .config import Config, config_path, secret_names
 from .errors import ClaudapterError
 
 
@@ -42,8 +42,11 @@ def _read(path: Path) -> dict[str, str]:
 
 
 def get_token(config: Config, provider_id: str) -> str:
-    name = secret_var(provider_id)
-    return _read(env_path(config)).get(name) or os.environ.get(name, "")
+    name, legacy = secret_names(provider_id)
+    values = _read(env_path(config))
+    # Legacy keys are accepted only from the explicitly selected adapter dotenv,
+    # never from native Claude authentication variables in the environment.
+    return values.get(name) or os.environ.get(name, "") or (values.get(legacy, "") if legacy != name else "")
 
 
 def _write(path: Path, values: dict[str, str]) -> None:
@@ -66,13 +69,17 @@ def store_token(config: Config, provider_id: str, token: str) -> None:
         raise ClaudapterError("API key cannot be empty or contain line breaks.")
     path = env_path(config)
     values = _read(path)
-    values[secret_var(provider_id)] = token
+    name, legacy = secret_names(provider_id)
+    values[name] = token
+    if legacy != name:
+        values.pop(legacy, None)
     _write(path, values)
 
 
 def remove_token(config: Config, provider_id: str) -> None:
     path = env_path(config)
     values = _read(path)
-    values.pop(secret_var(provider_id), None)
+    for name in secret_names(provider_id):
+        values.pop(name, None)
     if path.exists():
         _write(path, values)

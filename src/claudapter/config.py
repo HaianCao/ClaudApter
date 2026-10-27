@@ -75,8 +75,15 @@ def validate_provider_id(value: str) -> str:
     return value
 
 
+def secret_names(provider_id: str) -> tuple[str, str]:
+    """Keep adapter credentials out of Claude's native authentication namespace."""
+    legacy = re.sub(r"[^A-Za-z0-9]", "_", validate_provider_id(provider_id)).upper() + "_TOKEN"
+    name = "CLAUDE_CA_PROVIDER_" + legacy if legacy.startswith(("ANTHROPIC_", "CLAUDE_CODE_")) else legacy
+    return name, legacy
+
+
 def secret_var(provider_id: str) -> str:
-    return re.sub(r"[^A-Za-z0-9]", "_", validate_provider_id(provider_id)).upper() + "_TOKEN"
+    return secret_names(provider_id)[0]
 
 
 def validate_base_url(value: str, protocol: str = "messages") -> str:
