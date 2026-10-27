@@ -70,7 +70,7 @@ def cache_path(config: Config | None = None) -> Path:
 
 
 def validate_provider_id(value: str) -> str:
-    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", value):
+    if not isinstance(value, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", value):
         raise ClaudapterError("Provider ID must contain lowercase letters, digits, _ or -.")
     return value
 
@@ -88,6 +88,7 @@ def secret_var(provider_id: str) -> str:
 
 
 def validate_base_url(value: str, protocol: str = "messages") -> str:
+    _text(value, "base_url", required=True)
     value = value.strip().rstrip("/")
     try:
         parsed = urlsplit(value)
@@ -109,15 +110,28 @@ def claude_base_url(value: str) -> str:
     return value[:-3] if urlsplit(value).path.endswith("/v1") else value
 
 
+def _text(value, field_name: str, *, required: bool = False) -> None:
+    if not isinstance(value, str) or "\0" in value or (required and not value.strip()):
+        raise ClaudapterError(f"{field_name} must be {'non-empty ' if required else ''}text without NUL characters.")
+
+
 def validate(config: Config) -> None:
+    if not isinstance(config, Config) or not isinstance(config.providers, dict):
+        raise ClaudapterError("Configuration providers must be a mapping of provider IDs to providers.")
+    for field_name in ("default_provider", "default_model", "default_effort"):
+        _text(getattr(config, field_name), field_name)
     if config.default_effort not in EFFORTS:
         raise ClaudapterError("Invalid effort level.")
     used_secret_names: set[str] = set()
     for provider_id, provider in config.providers.items():
+        validate_provider_id(provider_id)
+        if not isinstance(provider, Provider):
+            raise ClaudapterError("Each configured provider must be a Provider object.")
+        for field_name in ("id", "display_name", "base_url", "auth_mode", "default_model", "execution_mode", "protocol", "upstream_reasoning"):
+            _text(getattr(provider, field_name), "provider." + field_name, required=field_name != "default_model")
         from .gateway_options import validate_gateway_limits
         validate_gateway_limits(provider.gateway_limits, provider.execution_mode)
         validate_capability_settings(provider.capabilities_file, provider.require_verified_capabilities, provider.execution_mode)
-        validate_provider_id(provider_id)
         if provider.id != provider_id or not provider.display_name.strip():
             raise ClaudapterError(f"Invalid provider: {provider_id}")
         if provider.protocol not in {"messages", "chat", "responses"}:
@@ -148,12 +162,20 @@ def load(path: Path | None = None) -> Config:
         return Config(path=path)
     try:
         raw = tomllib.loads(path.read_text(encoding="utf-8"))
-        if raw.get("schema_version") != 1:
+        if type(raw.get("schema_version")) is not int or raw["schema_version"] != 1:
             raise ClaudapterError("Unsupported config schema version.")
         defaults = raw.get("defaults", {})
+        if not isinstance(defaults, dict):
+            raise ClaudapterError("defaults must be a TOML table.")
+        items = raw.get("providers", [])
+        if not isinstance(items, list):
+            raise ClaudapterError("providers must be an array of TOML tables ([[providers]]).")
         providers = {}
-        for item in raw.get("providers", []):
+        for item in items:
+            if not isinstance(item, dict):
+                raise ClaudapterError("Each providers entry must be a TOML table.")
             provider = Provider(**{"upstream_reasoning": "auto", **item})
+            validate_provider_id(provider.id)
             if provider.id in providers:
                 raise ClaudapterError(f"Duplicate provider: {provider.id}")
             providers[provider.id] = provider
