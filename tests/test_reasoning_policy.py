@@ -50,3 +50,25 @@ def test_native_reasoning_override_does_not_disable_unrelated_features():
     assert "DISABLE_PROMPT_CACHING" not in env
     assert "ENABLE_TOOL_SEARCH" not in env
     assert "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS" not in env
+
+
+@pytest.mark.parametrize("protocol,base,policy", [("messages", "https://example.test/v1", "provider_default"), ("chat", "https://openrouter.ai/api/v1", "openrouter_disabled"), ("chat", "https://openrouter.ai.evil.test/api/v1", "disabled"), ("responses", "https://example.test/v1", "disabled")])
+def test_auto_reasoning_uses_exact_route_and_endpoint(tmp_path, monkeypatch, protocol, base, policy):
+    pytest.importorskip("protoverta.automatic_reasoning")
+    provider = Provider("demo", "Demo", base, protocol=protocol, execution_mode="gateway", upstream_reasoning="auto")
+    config = Config({"demo": provider}, path=tmp_path / "config.toml")
+    monkeypatch.setattr("claudapter.launcher.get_token", lambda *_: "synthetic")
+    gateway, _ = _gateway(config, provider)
+    assert gateway.upstream_reasoning == policy
+    assert provider.upstream_reasoning == "auto"
+    save(config)
+    assert load(config.path).providers["demo"].upstream_reasoning == "auto"
+
+
+def test_direct_auto_does_not_disable_native_thinking(monkeypatch):
+    monkeypatch.setattr("claudapter.launcher.shutil.which", lambda _: "claude.exe")
+    monkeypatch.setattr("claudapter.launcher.get_token", lambda *_: "synthetic")
+    monkeypatch.delenv("MAX_THINKING_TOKENS", raising=False)
+    provider = Provider("demo", "Demo", "https://example.test/v1", upstream_reasoning="auto")
+    args, env = build_invocation(Config(), provider, "m", "high", [])
+    assert "MAX_THINKING_TOKENS" not in env and "--settings" not in args

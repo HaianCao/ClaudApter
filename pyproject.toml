@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "claudapter"
-version = "0.2.0a1"
+version = "0.2.0a2"
 description = "A local provider setup studio and launcher for Claude Code"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -13,7 +13,7 @@ dependencies = []
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
-gateway = ["protoverta==0.3.0a7"]
+gateway = ["protoverta==0.3.0a8"]
 
 [project.scripts]
 claude-ca = "claudapter.cli:main"

@@ -19,6 +19,7 @@ from .config import (
 from .credentials import get_token
 from .errors import ClaudapterError
 from .gateway_options import runtime_options, session_options, validate_gateway_limits
+from .mcp import environment_references, load_servers, session_arguments
 
 
 def _bypass_loopback_proxy(env: dict[str, str]) -> None:
@@ -30,7 +31,7 @@ def _bypass_loopback_proxy(env: dict[str, str]) -> None:
 
 def build_invocation(config: Config, provider: Provider, model: str, effort: str, extra: list[str], mode: str = "run", *, gateway_url: str | None = None, gateway_token: str | None = None) -> tuple[list[str], dict[str, str]]:
     validate_capability_settings(provider.capabilities_file, provider.require_verified_capabilities, provider.execution_mode)
-    if provider.upstream_reasoning not in ("provider_default", "disabled", "openrouter_disabled") or (provider.execution_mode != "gateway" and provider.upstream_reasoning != "provider_default"):
+    if provider.upstream_reasoning not in ("auto", "provider_default", "disabled", "openrouter_disabled") or (provider.execution_mode != "gateway" and provider.upstream_reasoning not in ("auto", "provider_default")):
         raise ClaudapterError("An explicit upstream reasoning policy requires gateway mode.")
     if provider.execution_mode not in {"direct", "gateway"}:
         raise ClaudapterError("Unsupported execution mode.")
@@ -73,7 +74,7 @@ def build_invocation(config: Config, provider: Provider, model: str, effort: str
         # Scope compatibility settings to this child process, never user files.
         env.update({"CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1", "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS": "1",
                     "DISABLE_PROMPT_CACHING": "1", "ENABLE_TOOL_SEARCH": "false"})
-    if cross_protocol or provider.upstream_reasoning != "provider_default":
+    if cross_protocol or provider.upstream_reasoning not in ("auto", "provider_default"):
         env.update({"MAX_THINKING_TOKENS": "0", "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING": "1"})
         args += ["--settings", '{"alwaysThinkingEnabled":false}']
     if effort != "default":
@@ -89,6 +90,10 @@ def build_invocation(config: Config, provider: Provider, model: str, effort: str
     args += extra
     if any(not isinstance(arg, str) or "\0" in arg for arg in args):
         raise ClaudapterError("CLI arguments must be strings without NUL characters.")
+    try:
+        environment_references(load_servers(os.environ.get("CLAUDE_CA_MCP_CONFIG")), env)
+    except ValueError as exc:
+        raise ClaudapterError(str(exc)) from None
     return args, env
 
 
@@ -112,7 +117,12 @@ def _gateway(config: Config, provider: Provider):
             if not path.is_absolute():
                 path = (config.path or config_path()).resolve().parent / path
             options.update(capabilities=CapabilityRegistry.load(path), require_verified_capabilities=required)
-        gateway = GatewayConfig(upstream, base_url, get_token(config, provider.id), secrets.token_urlsafe(32), "x-api-key" if provider.auth_mode == "api_key" else "bearer", upstream_reasoning=provider.upstream_reasoning, **options)
+        reasoning_policy = provider.upstream_reasoning
+        if reasoning_policy == "auto":
+            from protoverta.automatic_reasoning import automatic_reasoning
+
+            reasoning_policy, _ = automatic_reasoning("messages", upstream, base_url)
+        gateway = GatewayConfig(upstream, base_url, get_token(config, provider.id), secrets.token_urlsafe(32), "x-api-key" if provider.auth_mode == "api_key" else "bearer", upstream_reasoning=reasoning_policy, **options)
     except (ImportError, OSError, TypeError, ValueError) as exc:
         raise ClaudapterError(f"Invalid or incompatible Protoverta gateway configuration: {exc}") from exc
     return gateway, gateway_session
@@ -148,14 +158,24 @@ def preflight(config: Config, provider: Provider, model: str, effort: str) -> No
 
 
 def launch(config: Config, provider: Provider, model: str, effort: str, extra: list[str], mode: str = "run") -> int:
+    def run(args, env):
+        try:
+            with session_arguments(os.environ.get("CLAUDE_CA_MCP_CONFIG"), env) as options:
+                # Keep a possible [node.exe, cli.js] prefix intact. --model is
+                # our first Claude option, before user passthrough arguments.
+                index = args.index("--model")
+                return subprocess.run([*args[:index], *options, *args[index:]], env=env, check=False).returncode
+        except ValueError as exc:
+            raise ClaudapterError(str(exc)) from None
+
     try:
         if provider.execution_mode == "gateway":
             gateway, gateway_session = _gateway(config, provider)
             _verify_capabilities(gateway, model, effort)
             with session_options(config.path or config_path(), provider) as observer_options, gateway_session(gateway, **observer_options) as origin:
                 args, env = build_invocation(config, provider, model, effort, extra, mode, gateway_url=origin, gateway_token=gateway.inbound_token)
-                return subprocess.run(args, env=env, check=False).returncode
+                return run(args, env)
         args, env = build_invocation(config, provider, model, effort, extra, mode)
-        return subprocess.run(args, env=env, check=False).returncode
+        return run(args, env)
     except OSError as exc:
         raise ClaudapterError(f"Could not start Claude Code: {exc}") from exc

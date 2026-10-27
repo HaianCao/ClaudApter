@@ -62,13 +62,13 @@ When you choose **Run Claude Code**, the setup page stops and Claude Code takes 
 
 ### Optional local gateway
 
-In the provider editor, **Upstream reasoning** defaults to the provider/client
-settings. Choose **Disabled — OpenRouter** for OpenRouter models whose default
-reasoning cannot be translated, or **Disabled — standard API** for compatible
-upstreams. Disabling requires gateway mode and overrides effort; models requiring
-reasoning may reject it. Unsupported reasoning output is never silently hidden.
+Reasoning compatibility is automatic for new providers. Native Messages keeps
+the provider's reasoning behavior; translated connections request reasoning off
+using the appropriate endpoint policy. Manual overrides remain under **Advanced:
+reasoning settings**. Models requiring incompatible reasoning can still be
+unsupported; returned reasoning is never silently hidden.
 
-This checkout prepares gateway preview **0.2.0a1** with Protoverta **0.3.0a7**.
+This checkout prepares gateway preview **0.2.0a2** with Protoverta **0.3.0a8**.
 Until those snapshots are published, use the local installer with
 `-ProtovertaWheel PATH_TO_A7_WHEEL`; the public a6 wheel lacks the new runtime
 options. Once the matching preview/core are published, install with:
@@ -139,6 +139,14 @@ Gateway mode is experimental. Client interoperability is tested with scripted lo
 ClaudApter does not edit Claude Code's own settings or session transcripts. The `doctor` command sends a small real `/v1/messages` request and may incur an API charge; it does not verify streaming or tool calls. Resuming with a different provider/model can be attempted, but equivalent reasoning state or tool behavior is not guaranteed.
 
 If Claude Code's `/status` shows a different gateway or credential from the one selected in ClaudApter, check for conflicting `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, or `ANTHROPIC_API_KEY` values in Claude Code's [settings files](https://code.claude.com/docs/en/llm-gateway-connect). Claude Code gives settings-file environment values precedence over a launcher process's environment; ClaudApter does not overwrite those settings. In API-key mode, Claude Code may also ask you to approve the key once.
+
+## Session tools
+
+External stdio MCP servers can be selected for one launch with
+`CLAUDE_CA_MCP_CONFIG`: a JSON file with `mcpServers`, each containing an absolute
+executable `command`, optional `args`, and `env_vars` names. Claude loads only
+these servers for that launch. Keys stay in environment variables; the temporary
+Claude configuration contains variable references and is cleaned up on exit.
 
 ## For contributors
 

@@ -14,6 +14,7 @@ auth_mode = "bearer" # bearer or api_key
 default_model = "claude-model-id"
 protocol = "messages" # messages, chat or responses; non-Messages requires gateway
 execution_mode = "direct" # direct or gateway
+upstream_reasoning = "auto" # Automatic route compatibility; native Messages unchanged.
 # Optional capability checks require execution_mode = "gateway".
 # capabilities_file = "capabilities.json" # relative to this config file
 # require_verified_capabilities = true

@@ -122,7 +122,7 @@ def validate(config: Config) -> None:
             raise ClaudapterError(f"Invalid auth mode for {provider_id}.")
         if provider.execution_mode not in {"direct", "gateway"}:
             raise ClaudapterError(f"Invalid execution mode for {provider_id}.")
-        if provider.upstream_reasoning not in ("provider_default", "disabled", "openrouter_disabled") or (provider.execution_mode != "gateway" and provider.upstream_reasoning != "provider_default"):
+        if provider.upstream_reasoning not in ("auto", "provider_default", "disabled", "openrouter_disabled") or (provider.execution_mode != "gateway" and provider.upstream_reasoning not in ("auto", "provider_default")):
             raise ClaudapterError("An explicit upstream reasoning policy requires gateway mode.")
         if provider.protocol != "messages" and provider.execution_mode != "gateway":
             raise ClaudapterError("Chat and Responses providers require local Protoverta gateway mode.")
@@ -145,7 +145,7 @@ def load(path: Path | None = None) -> Config:
         defaults = raw.get("defaults", {})
         providers = {}
         for item in raw.get("providers", []):
-            provider = Provider(**item)
+            provider = Provider(**{"upstream_reasoning": "auto", **item})
             if provider.id in providers:
                 raise ClaudapterError(f"Duplicate provider: {provider.id}")
             providers[provider.id] = provider

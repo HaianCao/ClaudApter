@@ -66,6 +66,34 @@ def test_non_ascii_query_and_header_are_unauthorized_not_handler_errors(tmp_path
             assert response.status == 200
 
 
+def test_missing_mcp_variable_keeps_setup_open_and_does_not_save_defaults(tmp_path, monkeypatch):
+    from claudapter import launcher
+
+    mcp = tmp_path / "mcp.json"
+    mcp.write_text(json.dumps({"mcpServers": {"fixture": {"command": sys.executable, "env_vars": ["MISSING_FIXTURE_VARIABLE"]}}}))
+    monkeypatch.setenv("CLAUDE_CA_MCP_CONFIG", str(mcp))
+    monkeypatch.delenv("MISSING_FIXTURE_VARIABLE", raising=False)
+    monkeypatch.setattr(launcher.shutil, "which", lambda _: "claude.exe")
+    monkeypatch.setattr(launcher, "get_token", lambda *_: "synthetic")
+    with listener(tmp_path, monkeypatch) as (_, url, token, _), patch.object(web, "launch") as launched:
+        origin = f"http://{url.netloc}"
+        headers = {"X-Claudapter-Token": token, "Content-Type": "application/json"}
+        provider = {"id": "fixture", "display_name": "Fixture", "base_url": "https://example.test/v1", "api_key": "synthetic"}
+        with urlopen(Request(origin + "/api/provider", data=json.dumps(provider).encode(), headers=headers), timeout=3) as response:
+            assert response.status == 200
+        before = (tmp_path / "config.toml").read_bytes()
+        with pytest.raises(HTTPError) as error:
+            urlopen(Request(origin + "/api/run", data=json.dumps({"provider": "fixture", "model": "m"}).encode(), headers=headers), timeout=3)
+        with error.value as response:
+            assert response.status == 400
+            assert "missing from the child" in json.load(response)["error"]
+        with urlopen(Request(origin + "/api/config", headers=headers), timeout=3) as response:
+            state = json.load(response)
+            assert state["defaults"]["provider"] == ""
+        assert (tmp_path / "config.toml").read_bytes() == before
+        launched.assert_not_called()
+
+
 @pytest.mark.parametrize("value", ["é", "💡", "", None, b"fixture"])
 def test_token_matcher_rejects_malformed_values(value):
     assert token_matches(value, "fixture") is False

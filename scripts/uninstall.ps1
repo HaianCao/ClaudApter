@@ -147,7 +147,7 @@ function Invoke-AdapterUninstall {
 }
 
 try {
-    Invoke-AdapterUninstall -Name 'ClaudApter' -InstallNames @('claudapter') -DataNames @('claudapter') -EnvironmentNames @('CLAUDE_CA_CONFIG', 'CLAUDE_CA_CACHE', 'CLAUDE_CA_ENV_FILE') -PipxNames @('claudapter') -DeleteData:$DeleteData -ResetEnvironment:$ResetEnvironment -NonInteractive:$NonInteractive -NoPathChanges:$NoPathChanges
+    Invoke-AdapterUninstall -Name 'ClaudApter' -InstallNames @('claudapter') -DataNames @('claudapter') -EnvironmentNames @('CLAUDE_CA_CONFIG', 'CLAUDE_CA_CACHE', 'CLAUDE_CA_ENV_FILE', 'CLAUDE_CA_MCP_CONFIG') -PipxNames @('claudapter') -DeleteData:$DeleteData -ResetEnvironment:$ResetEnvironment -NonInteractive:$NonInteractive -NoPathChanges:$NoPathChanges
 }
 catch {
     Write-Host ("Uninstall failed: " + $_.Exception.Message) -ForegroundColor Red

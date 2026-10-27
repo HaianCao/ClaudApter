@@ -23,7 +23,7 @@ $definitions = $ast.FindAll({param($node) $node -is [Management.Automation.Langu
 foreach ($definition in $definitions) { . ([scriptblock]::Create($definition.Extent.Text)) }
 $fake = @{}
 $writes = [Collections.Generic.List[object]]::new()
-$names = @(($env:HOTFIX_PREFIX + '_CONFIG'), ($env:HOTFIX_PREFIX + '_CACHE'), ($env:HOTFIX_PREFIX + '_ENV_FILE'))
+$names = @(($env:HOTFIX_PREFIX + '_CONFIG'), ($env:HOTFIX_PREFIX + '_CACHE'), ($env:HOTFIX_PREFIX + '_ENV_FILE'), ($env:HOTFIX_PREFIX + '_MCP_CONFIG'))
 foreach ($name in $names) {
     $fake["User|$name"] = 'fixture-override'
     $fake["Process|$name"] = 'fixture-override'
@@ -118,7 +118,7 @@ def test_uninstall_choices_are_scoped_and_independent(tmp_path, scenario):
         else:
             assert report["user_path"] == r"C:\Keep"
             assert report["process_path"] == r"C:\ProcessKeep"
-        assert all(write["Scope"] != "Machine" and write["Name"] in {"Path", PREFIX + "_CONFIG", PREFIX + "_CACHE", PREFIX + "_ENV_FILE"} for write in report["writes"])
+        assert all(write["Scope"] != "Machine" and write["Name"] in {"Path", PREFIX + "_CONFIG", PREFIX + "_CACHE", PREFIX + "_ENV_FILE", PREFIX + "_MCP_CONFIG"} for write in report["writes"])
         if scenario == "no_matches":
             assert not report["writes"]
             assert "No adapter wrapper entries were found" in result.stdout

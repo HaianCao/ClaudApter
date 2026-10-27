@@ -229,7 +229,7 @@ def serve(config: Config) -> int:
                     default_model = str(body.get("default_model", "")).strip() or (old_provider.default_model if old_provider else "")
                     execution_mode = str(body.get("execution_mode", old_provider.execution_mode if old_provider else "direct"))
                     protocol = str(body.get("protocol", old_provider.protocol if old_provider else "messages"))
-                    upstream_reasoning = str(body.get("upstream_reasoning", old_provider.upstream_reasoning if old_provider else "provider_default"))
+                    upstream_reasoning = str(body.get("upstream_reasoning", old_provider.upstream_reasoning if old_provider else "auto"))
                     capabilities_file, require_verified = validate_capability_settings(body.get("capabilities_file", old_provider.capabilities_file if old_provider else ""), body.get("require_verified_capabilities", old_provider.require_verified_capabilities if old_provider else False), execution_mode)
                     provider = Provider(provider_id, display_name, validate_base_url(str(body.get("base_url", "")), protocol), mode, default_model, execution_mode, protocol, upstream_reasoning, capabilities_file, require_verified)
                     provider.gateway_limits = validate_gateway_limits(body.get("gateway_limits", old_provider.gateway_limits if old_provider else {}), execution_mode)
