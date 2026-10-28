@@ -70,7 +70,7 @@ unsupported; returned reasoning is never silently hidden.
 
 This checkout prepares gateway preview **0.2.0a2** with Protoverta **0.3.0a8**.
 Until those snapshots are published, use the local installer with
-`-ProtovertaWheel PATH_TO_A7_WHEEL`; the public a6 wheel lacks the new runtime
+`-ProtovertaWheel PATH_TO_A8_WHEEL`; the public a6 wheel lacks the new runtime
 options. Once the matching preview/core are published, install with:
 
 ```powershell
@@ -107,7 +107,7 @@ claude-ca validate
 claude-ca --help
 ```
 
-After installation, `claude-ca` is available from any working directory. Re-run the installer command to update ClaudApter; your provider settings and API keys are retained.
+After installation, `claude-ca` is available from any working directory. Re-run the installer command to update ClaudApter; your provider settings and API keys are retained. Updates are checked before activation, so a failed download or package preparation leaves the existing version usable.
 
 ## Uninstall
 

@@ -43,7 +43,7 @@ jobs:
       - name: Check PowerShell syntax
         shell: pwsh
         run: |
-          foreach ($file in @('scripts/install.ps1', 'scripts/uninstall.ps1')) {
+          foreach ($file in @('scripts/install.ps1', 'scripts/install-environment.ps1', 'scripts/uninstall.ps1')) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$tokens, [ref]$errors) | Out-Null
@@ -53,16 +53,23 @@ jobs:
         shell: pwsh
         run: |
           & .\scripts\install.ps1 -SkipClaudeInstall -NonInteractive
-          $launcher = Join-Path $env:LOCALAPPDATA 'Programs\claudapter\venv\Scripts\claude-ca.exe'
-          if (-not (Test-Path -LiteralPath $launcher)) { throw 'claude-ca.exe was not installed' }
+          if ($LASTEXITCODE -ne 0) { throw 'Initial wrapper installation failed' }
+          . .\scripts\install-environment.ps1
+          $root = Join-Path $env:LOCALAPPDATA 'Programs\claudapter'
+          $launcher = Join-Path $root 'bin\claude-ca.exe'
+          if (-not (Test-Path -LiteralPath $launcher)) { throw 'claude-ca launcher was not installed' }
           & $launcher --help
           if ($LASTEXITCODE -ne 0) { throw 'claude-ca --help failed' }
           & .\scripts\install.ps1 -SkipClaudeInstall -NonInteractive -WithGateway
-          $python = Join-Path (Split-Path -Parent $launcher) 'python.exe'
+          if ($LASTEXITCODE -ne 0) { throw 'Gateway update failed' }
+          $python = Get-AdapterInstalledPython $root
           & $python -c "import importlib.metadata; assert importlib.metadata.version('protoverta') == '0.3.0a8'"
           if ($LASTEXITCODE -ne 0) { throw 'Released gateway component was not installed' }
           & .\scripts\install.ps1 -SkipClaudeInstall -NonInteractive
+          if ($LASTEXITCODE -ne 0) { throw 'Wrapper update failed' }
+          $python = Get-AdapterInstalledPython $root
           & $python -c "import protoverta.server"
           if ($LASTEXITCODE -ne 0) { throw 'Updating dropped the gateway component' }
           & .\scripts\uninstall.ps1 -NonInteractive
-          if (Test-Path -LiteralPath $launcher) { throw 'claude-ca.exe was not removed' }
+          if ($LASTEXITCODE -ne 0) { throw 'Wrapper uninstall failed' }
+          if (Test-Path -LiteralPath $launcher) { throw 'claude-ca launcher was not removed' }

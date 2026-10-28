@@ -81,6 +81,7 @@ function Invoke-AdapterUninstall {
     foreach ($installName in $InstallNames) {
         $target = Join-Path $programsRoot $installName
         $pathTargets += Join-Path $target 'venv\Scripts'
+        $pathTargets += Join-Path $target 'bin'
         if (Remove-AdapterDirectory $target $programsRoot $installName) { $removed = $true }
     }
     if ($removed) { Write-Host "Removed $Name program files." }

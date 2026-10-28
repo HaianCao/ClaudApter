@@ -1,6 +1,7 @@
 param([switch]$SkipClaudeInstall, [switch]$NonInteractive, [switch]$WithGateway, [string]$ProtovertaWheel, [switch]$NoPathChanges, [string]$SourceBranch = 'main')
 $ErrorActionPreference = 'Stop'
 $sourceTempRoot = $null
+$installLock = $null
 
 function Write-Step([string]$Message) {
     Write-Host "`n==> $Message" -ForegroundColor Cyan
@@ -48,6 +49,17 @@ function Add-UserPath([string]$Directory) {
     }
 }
 
+function Remove-UserPath([string]$Directory) {
+    if ($NoPathChanges) { return }
+    $current = [Environment]::GetEnvironmentVariable('Path', 'User')
+    $entries = @($current -split ';' | Where-Object { $_ })
+    $kept = @($entries | Where-Object { $_.TrimEnd('\') -ine $Directory.TrimEnd('\') })
+    if ($kept.Count -ne $entries.Count) {
+        [Environment]::SetEnvironmentVariable('Path', ($kept -join ';'), 'User')
+    }
+    $env:Path = (@($env:Path -split ';' | Where-Object { $_ -and $_.TrimEnd('\') -ine $Directory.TrimEnd('\') }) -join ';')
+}
+
 try {
     if ($SourceBranch -notmatch '^[A-Za-z0-9][A-Za-z0-9._/-]*$' -or $SourceBranch.Contains('..')) {
         throw 'SourceBranch must be a valid Git branch name.'
@@ -93,21 +105,16 @@ try {
     Write-Host "Using Python: $pythonExe"
 
     $installRoot = Join-Path $env:LOCALAPPDATA 'Programs\claudapter'
-    $venv = Join-Path $installRoot 'venv'
-    $venvPython = Join-Path $venv 'Scripts\python.exe'
-    $commandPath = Join-Path $venv 'Scripts\claude-ca.exe'
-    $isUpdate = Test-Path -LiteralPath $commandPath
+    . (Join-Path $repoRoot 'scripts\install-environment.ps1')
+    $installLock = Open-AdapterInstallLock $installRoot
+    $previousPython = Get-AdapterInstalledPython $installRoot
+    $isUpdate = [bool]$previousPython
     if ($isUpdate) { Write-Step 'Updating ClaudApter' }
     else { Write-Step 'Installing ClaudApter' }
-    if (-not (Test-Path -LiteralPath $venvPython)) {
-        New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
-        & $pythonExe -m venv $venv
-        if ($LASTEXITCODE -ne 0) { throw 'Could not create the ClaudApter Python environment.' }
-    }
     $installTarget = $repoRoot
     $gatewayPackages = @()
-    if (-not $WithGateway -and -not $ProtovertaWheel) {
-        $hasGateway = & $venvPython -c "import importlib.util; print(int(importlib.util.find_spec('protoverta') is not None))"
+    if ($previousPython -and -not $WithGateway -and -not $ProtovertaWheel) {
+        $hasGateway = & $previousPython -I -c "import importlib.util; print(int(importlib.util.find_spec('protoverta') is not None))"
         if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the existing gateway installation.' }
         if (([string]$hasGateway).Trim() -eq '1') { $WithGateway = $true }
     }
@@ -127,9 +134,7 @@ try {
             $gatewayPackages += 'https://github.com/HaianCao/Protoverta/releases/download/v0.3.0a8/protoverta-0.3.0a8-py3-none-any.whl'
         }
     }
-    & $venvPython -m pip install --disable-pip-version-check --force-reinstall $installTarget @gatewayPackages
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $commandPath)) { throw 'ClaudApter package installation failed.' }
-    Add-UserPath (Join-Path $venv 'Scripts')
+    $candidate = New-AdapterEnvironment -Root $installRoot -Python $pythonExe -Target $installTarget -GatewayPackages $gatewayPackages -Module 'claudapter' -Command 'claude-ca'
 
     Write-Step 'Checking the official Claude Code CLI'
     $claudeCommand = Get-Command claude -ErrorAction SilentlyContinue
@@ -154,6 +159,9 @@ try {
     if (-not $SkipClaudeInstall -and -not (Get-Command claude -ErrorAction SilentlyContinue) -and -not (Test-Path -LiteralPath $nativeClaude)) {
         Write-Warning 'Claude Code CLI is not on PATH yet. Install it or open a new terminal and verify: claude --version'
     }
+    Set-AdapterCurrentEnvironment $installRoot $candidate.Id
+    Add-UserPath $candidate.Bin
+    Remove-UserPath (Join-Path $installRoot 'venv\Scripts')
     if ($isUpdate) { Write-Host 'ClaudApter update complete. Provider settings and API keys were preserved.' -ForegroundColor Green }
     else { Write-Host 'ClaudApter installation complete.' -ForegroundColor Green }
     Write-Host 'Open a new CMD, PowerShell, or Windows Terminal tab and run: claude-ca setup'
@@ -163,6 +171,7 @@ catch {
     exit 1
 }
 finally {
+    if ($installLock) { $installLock.Dispose() }
     if ($sourceTempRoot) {
         $tempParent = [IO.Path]::GetFullPath((Split-Path -Parent $sourceTempRoot)).TrimEnd('\')
         $expectedParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')

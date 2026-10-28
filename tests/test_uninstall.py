@@ -37,8 +37,10 @@ $wrapper = Join-Path $install 'venv\Scripts'
 $config = Join-Path $env:APPDATA $env:HOTFIX_DATA
 $cache = Join-Path $env:LOCALAPPDATA $env:HOTFIX_DATA
 New-Item -ItemType Directory -Path $wrapper, $config, $cache -Force | Out-Null
-$fake['User|Path'] = '"' + $wrapper + '";C:\Keep'
-$fake['Process|Path'] = $wrapper.ToUpperInvariant() + '\;C:\ProcessKeep'
+$bin = Join-Path $install 'bin'
+New-Item -ItemType Directory -Path $bin -Force | Out-Null
+$fake['User|Path'] = '"' + $wrapper + '";' + $bin + ';C:\Keep'
+$fake['Process|Path'] = $wrapper.ToUpperInvariant() + '\;' + $bin.ToUpperInvariant() + '\;C:\ProcessKeep'
 $fake['Machine|Path'] = $wrapper
 if ($env:HOTFIX_SCENARIO -eq 'no_matches') {
     $fake['User|Path'] = 'C:\Keep'
