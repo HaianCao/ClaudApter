@@ -9,7 +9,7 @@ from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from .catalog import cached_models, fetch_models
+from .catalog import _identity, cached_models, fetch_models, store_catalog
 from .config import (
     EFFORTS,
     Config,
@@ -24,6 +24,7 @@ from .config import (
 from .credentials import env_path, get_token, remove_token, store_token
 from .errors import ClaudapterError
 from .gateway_options import validate_gateway_limits, validate_gateway_runtime
+from .http_deadline import Deadline
 from .launcher import launch, preflight
 from .settings_store import SettingsGuard, atomic_bytes
 from .web_http import SetupHTTPServer as ThreadingHTTPServer
@@ -78,6 +79,7 @@ def serve(config: Config) -> int:
     requested_run: tuple[Provider, str, str] | None = None
     state_lock = threading.RLock()
     guard = SettingsGuard(config.path or config_path())
+    refreshes = set()
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_args):
@@ -190,31 +192,50 @@ def serve(config: Config) -> int:
                 return
             try:
                 self.connection.settimeout(15)
+                body = self._body()
+                if urlsplit(self.path).path == "/api/models/refresh":
+                    self._refresh(body)
+                    return
                 with state_lock, guard.edit():
-                    self._post()
+                    self._post(body)
             except TimeoutError:
                 self._json({"error": "Setup request timed out."}, HTTPStatus.REQUEST_TIMEOUT)
+            except ClaudapterError as exc:
+                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             except (OSError, ValueError):
                 self._json({"error": "Could not save settings. Reopen setup if settings changed elsewhere; check local storage permissions."}, HTTPStatus.BAD_REQUEST)
 
-        def _post(self):
+        def _refresh(self, body):
+            with state_lock, guard.edit():
+                snapshot = copy.deepcopy(config)
+                provider = snapshot.providers.get(str(body.get("provider", "")))
+                if provider is None:
+                    raise ClaudapterError("Choose a configured provider.")
+                credential = get_token(snapshot, provider.id)
+                identity = _identity(snapshot, provider, token=credential)
+                budget = Deadline(12)
+                refreshes.add(budget)
+            entries = []
+            try:
+                with budget:
+                    models = fetch_models(snapshot, provider, cache_sink=entries.append, budget=budget, token=credential)
+                with state_lock, guard.edit():
+                    current = config.providers.get(provider.id)
+                    if requested_run is not None or current != provider or _identity(config, current) != identity or (entries and entries[0]["identity"] != identity):
+                        raise ClaudapterError("Provider settings changed during refresh. Refresh models again.")
+                    if entries:
+                        store_catalog(config, provider.id, entries[0])
+                self._json({"models": models})
+            finally:
+                with state_lock:
+                    refreshes.discard(budget)
+
+        def _post(self, body):
             nonlocal requested_run
             if not self._authorized():
                 self._json({"error": "Unauthorized"}, HTTPStatus.FORBIDDEN)
                 return
-            try:
-                body = self._body()
-                path = urlsplit(self.path).path
-                if path == "/api/models/refresh":
-                    with state_lock:
-                        provider = self._provider(str(body.get("provider", "")))
-                    self._json({"models": fetch_models(config, provider)})
-                    return
-            except TimeoutError:
-                raise  # Body reads belong to the outer 408 boundary.
-            except (ClaudapterError, OSError) as exc:
-                self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
-                return
+            path = urlsplit(self.path).path
             state_lock.acquire()
             try:
                 if path == "/api/provider":
@@ -313,6 +334,10 @@ def serve(config: Config) -> int:
     except KeyboardInterrupt:
         return 0
     finally:
+        with state_lock:
+            pending = tuple(refreshes)
+        for budget in pending:
+            budget.cancel()
         server.server_close()
     if requested_run:
         return launch(config, *requested_run, [])

@@ -8,12 +8,17 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from contextlib import nullcontext
 from http.client import HTTPException
 from pathlib import Path
 
 from .config import Config, Provider, cache_path, claude_base_url
 from .credentials import get_token, validate_token
 from .errors import ClaudapterError
+from .http_deadline import Deadline, DeadlineHTTPHandler, DeadlineHTTPSHandler
+from .settings_store import SettingsGuard
+
+_UNSET = object()
 
 
 def _url(provider: Provider, suffix: str) -> str:
@@ -24,8 +29,9 @@ def _url(provider: Provider, suffix: str) -> str:
     return provider.base_url.rstrip("/") + suffix
 
 
-def _headers(config: Config, provider: Provider) -> dict[str, str]:
-    token = get_token(config, provider.id)
+def _headers(config: Config, provider: Provider, *, token=_UNSET) -> dict[str, str]:
+    if token is _UNSET:
+        token = get_token(config, provider.id)
     if not token:
         raise ClaudapterError(f"No API key is saved for {provider.display_name}.")
     token = validate_token(token)
@@ -43,7 +49,7 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         raise ClaudapterError("Provider redirected the API request; refusing to forward your key.")
 
 
-_OPENER = urllib.request.build_opener(_NoRedirect())
+_OPENER = urllib.request.build_opener(_NoRedirect(), DeadlineHTTPHandler(), DeadlineHTTPSHandler())
 
 
 def _decode_json(raw):
@@ -55,9 +61,14 @@ def _decode_json(raw):
     return value
 
 
-def request_json(request: urllib.request.Request, timeout: float = 12) -> dict:
+def request_json(request: urllib.request.Request, timeout: float = 12, *, budget=None) -> dict:
     try:
-        with _OPENER.open(request, timeout=timeout) as response:
+        if budget is None:
+            with Deadline(timeout) as owned:
+                return request_json(request, timeout, budget=owned)
+        if request is not None:
+            request.adapter_deadline = budget
+        with _OPENER.open(request, timeout=budget.remaining()) as response:
             try:
                 declared_size = int(response.headers.get("Content-Length", "0"))
             except ValueError as exc:
@@ -65,6 +76,7 @@ def request_json(request: urllib.request.Request, timeout: float = 12) -> dict:
             if declared_size > 8_000_000:
                 raise ClaudapterError("Provider response is too large.")
             payload = response.read(8_000_001)
+            budget.remaining()
             if len(payload) > 8_000_000:
                 raise ClaudapterError("Provider response is too large.")
             data = _decode_json(payload)
@@ -78,16 +90,18 @@ def request_json(request: urllib.request.Request, timeout: float = 12) -> dict:
         raise ClaudapterError(f"Provider request failed: {type(exc).__name__}.") from None
 
 
-def _identity(config, provider):
+def _identity(config, provider, *, token=_UNSET):
     from .gateway_options import catalog_policy_fingerprint
 
+    if token is _UNSET:
+        token = get_token(config, provider.id)
     return {"base_url": provider.base_url, "protocol": provider.protocol, "auth_mode": provider.auth_mode,
-            "credential_fingerprint": hashlib.sha256((get_token(config, provider.id) or "").encode()).hexdigest(),
+            "credential_fingerprint": hashlib.sha256((token or "").encode()).hexdigest(),
             "catalog_policy_file": provider.gateway_runtime.get("catalog_policy_file", ""),
             "catalog_policy_fingerprint": catalog_policy_fingerprint(config.path, provider)}
 
 
-def _gateway_models(config, provider):
+def _gateway_models(config, provider, headers=None, budget=None):
     try:
         from protoverta.discovery import CatalogPolicy, fetch_catalog
 
@@ -98,61 +112,88 @@ def _gateway_models(config, provider):
             if not path.is_absolute():
                 path = (config.path.parent if config.path else Path.cwd()) / path
             policy = CatalogPolicy.load(path, provider.base_url)
-        return [item.as_dict() for item in fetch_catalog(provider.base_url, _headers(config, provider), policy)]
+        options = {}
+        if budget is not None:
+            def upstream_open(request, *, timeout):
+                request.adapter_deadline = budget
+                return _OPENER.open(request, timeout=min(timeout, budget.remaining()))
+            options["upstream_open"] = upstream_open
+        return [item.as_dict() for item in fetch_catalog(provider.base_url, _headers(config, provider) if headers is None else headers, policy, **options)]
     except ImportError:
         raise ClaudapterError("Gateway discovery requires the matching Protoverta preview.") from None
     except (ValueError, OSError, TypeError):
         raise ClaudapterError("Gateway catalog failed validation or exceeded its resource budget.") from None
 
 
-def fetch_models(config: Config, provider: Provider) -> list[dict[str, str]]:
+def _direct_models(config, provider, headers, timeout, budget=None):
     # Anthropic's API uses cursor pagination; a gateway may provide fewer pages.
     models: dict[str, dict[str, str]] = {}
-    gateway_info = _gateway_models(config, provider) if provider.execution_mode == "gateway" else None
-    if gateway_info is not None:
-        models = {item["id"]: {"id": item["id"], "display_name": item["display_name"]} for item in gateway_info}
     cursor = ""
-    for _ in range(0 if gateway_info is not None else 100):
-        query = {"limit": "1000"} if provider.protocol == "messages" else {}
-        if cursor:
-            query["after_id"] = cursor
-        request = urllib.request.Request(_url(provider, "/v1/models") + ("?" + urllib.parse.urlencode(query) if query else ""), headers=_headers(config, provider))
-        data = request_json(request)
-        entries = data.get("data")
-        if not isinstance(entries, list):
-            raise ClaudapterError("Provider model catalog has no data array.")
-        for entry in entries:
-            if isinstance(entry, dict) and isinstance(entry.get("id"), str) and entry["id"]:
-                name = entry.get("display_name") or entry.get("name")
-                models[entry["id"]] = {"id": entry["id"], "display_name": name if isinstance(name, str) and name else entry["id"]}
-        if not data.get("has_more"):
-            break
-        next_cursor = data.get("last_id")
-        if not isinstance(next_cursor, str) or not next_cursor or next_cursor == cursor:
-            raise ClaudapterError("Provider model catalog has invalid pagination.")
-        cursor = next_cursor
-    else:
-        if gateway_info is None:
-            raise ClaudapterError("Provider model catalog exceeds 100 pages.")
-    result = list(models.values())
     try:
-        path = cache_path(config)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        existing = _decode_json(path.read_text(encoding="utf-8")) if path.exists() else {}
-        if not isinstance(existing, dict):
-            existing = {}
-        existing[provider.id] = {"identity": _identity(config, provider), "saved_at": time.time(), "models": result, "model_info": gateway_info}
-        temporary = None
-        try:
-            with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, prefix=".models-", suffix=".tmp", delete=False) as stream:
-                temporary = stream.name
-                json.dump(existing, stream, ensure_ascii=False)
-            os.replace(temporary, path)
-        finally:
-            if temporary and os.path.exists(temporary):
-                os.unlink(temporary)
+        with (nullcontext(budget) if budget is not None else Deadline(timeout)) as active_budget:
+            for _ in range(100):
+                active_budget.remaining()
+                query = {"limit": "1000"} if provider.protocol == "messages" else {}
+                if cursor:
+                    query["after_id"] = cursor
+                request = urllib.request.Request(_url(provider, "/v1/models") + ("?" + urllib.parse.urlencode(query) if query else ""), headers=headers)
+                data = request_json(request, budget=active_budget)
+                entries = data.get("data")
+                if not isinstance(entries, list):
+                    raise ClaudapterError("Provider model catalog has no data array.")
+                for entry in entries:
+                    if isinstance(entry, dict) and isinstance(entry.get("id"), str) and entry["id"]:
+                        name = entry.get("display_name") or entry.get("name")
+                        models[entry["id"]] = {"id": entry["id"], "display_name": name if isinstance(name, str) and name else entry["id"]}
+                if not data.get("has_more"):
+                    break
+                next_cursor = data.get("last_id")
+                if not isinstance(next_cursor, str) or not next_cursor or next_cursor == cursor:
+                    raise ClaudapterError("Provider model catalog has invalid pagination.")
+                cursor = next_cursor
+            else:
+                raise ClaudapterError("Provider model catalog exceeds 100 pages.")
+    except (TimeoutError, ValueError):
+        raise ClaudapterError("Model discovery exceeded its total deadline or has an invalid timeout.") from None
+    return models
+
+
+def store_catalog(config, provider_id, entry):
+    path = cache_path(config)
+    try:
+        with SettingsGuard(path).edit():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            existing = _decode_json(path.read_text(encoding="utf-8")) if path.exists() else {}
+            if not isinstance(existing, dict):
+                existing = {}
+            existing[provider_id] = entry
+            temporary = None
+            try:
+                with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, prefix=".models-", suffix=".tmp", delete=False) as stream:
+                    temporary = stream.name
+                    json.dump(existing, stream, ensure_ascii=False)
+                os.replace(temporary, path)
+            finally:
+                if temporary and os.path.exists(temporary):
+                    os.unlink(temporary)
     except (OSError, ValueError):
         pass  # Catalog caching must never break a successful live discovery.
+
+
+def fetch_models(config: Config, provider: Provider, *, timeout=12, cache_sink=None, budget=None, token=_UNSET) -> list[dict[str, str]]:
+    if token is _UNSET:
+        token = get_token(config, provider.id)
+    headers = _headers(config, provider, token=token)
+    identity = _identity(config, provider, token=token)
+    gateway_info = _gateway_models(config, provider, headers, budget) if provider.execution_mode == "gateway" else None
+    models = ({item["id"]: {"id": item["id"], "display_name": item["display_name"]} for item in gateway_info}
+              if gateway_info is not None else _direct_models(config, provider, headers, timeout, budget))
+    result = list(models.values())
+    entry = {"identity": identity, "saved_at": time.time(), "models": result, "model_info": gateway_info}
+    if cache_sink is not None:
+        cache_sink(entry)
+    else:
+        store_catalog(config, provider.id, entry)
     return result
 
 
