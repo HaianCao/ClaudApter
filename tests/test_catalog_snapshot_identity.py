@@ -53,7 +53,7 @@ def test_cache_entry_identity_uses_the_original_request_credential(tmp_path, mon
         captured.append(request.get_header("Authorization"))
         return Response(json.dumps({"data": [{"id": "m"}]}).encode())
 
-    def gateway_request(base, headers, policy):
+    def gateway_request(base, headers, policy, **options):
         captured.append(headers.get("Authorization"))
         store("synthetic-replacement")
         return [SimpleNamespace(as_dict=lambda: {"id": "m", "display_name": "M"})]

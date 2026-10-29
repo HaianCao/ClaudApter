@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import tempfile
 import time
@@ -9,6 +10,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from contextlib import nullcontext
+from dataclasses import replace
 from http.client import HTTPException
 from pathlib import Path
 
@@ -101,8 +103,27 @@ def _identity(config, provider, *, token=_UNSET):
             "catalog_policy_fingerprint": catalog_policy_fingerprint(config.path, provider)}
 
 
-def _gateway_models(config, provider, headers=None, budget=None):
+class _CatalogDeadline(Deadline):
+    """Own a catalog timeout while retaining caller cancellation/socket tracking."""
+
+    def __init__(self, seconds, parent):
+        self.parent = parent
+        super().__init__(seconds)
+
+    def remaining(self):
+        remaining = super().remaining()
+        return min(remaining, self.parent.remaining()) if self.parent is not None else remaining
+
+    def bind(self, sock):
+        super().bind(sock)
+        if self.parent is not None:
+            self.parent.bind(sock)
+
+
+def _gateway_models(config, provider, headers=None, budget=None, *, timeout=12):
     try:
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("Catalog timeout must be a finite positive number.")
         from protoverta.discovery import CatalogPolicy, fetch_catalog
 
         policy = CatalogPolicy(pagination="after_id" if provider.protocol == "messages" else "none")
@@ -112,13 +133,15 @@ def _gateway_models(config, provider, headers=None, budget=None):
             if not path.is_absolute():
                 path = (config.path.parent if config.path else Path.cwd()) / path
             policy = CatalogPolicy.load(path, provider.base_url)
-        options = {}
-        if budget is not None:
+        policy = replace(policy, timeout=min(timeout, policy.timeout))
+        with _CatalogDeadline(policy.timeout, budget) as active_budget:
+            active_budget.remaining()
+
             def upstream_open(request, *, timeout):
-                request.adapter_deadline = budget
-                return _OPENER.open(request, timeout=min(timeout, budget.remaining()))
-            options["upstream_open"] = upstream_open
-        return [item.as_dict() for item in fetch_catalog(provider.base_url, _headers(config, provider) if headers is None else headers, policy, **options)]
+                request.adapter_deadline = active_budget
+                return _OPENER.open(request, timeout=min(timeout, active_budget.remaining()))
+
+            return [item.as_dict() for item in fetch_catalog(provider.base_url, _headers(config, provider) if headers is None else headers, policy, upstream_open=upstream_open)]
     except ImportError:
         raise ClaudapterError("Gateway discovery requires the matching Protoverta preview.") from None
     except (ValueError, OSError, TypeError):
@@ -190,7 +213,7 @@ def fetch_models(config: Config, provider: Provider, *, timeout=12, cache_sink=N
         token = get_token(config, provider.id)
     headers = _headers(config, provider, token=token)
     identity = _identity(config, provider, token=token)
-    gateway_info = _gateway_models(config, provider, headers, budget) if provider.execution_mode == "gateway" else None
+    gateway_info = _gateway_models(config, provider, headers, budget, timeout=timeout) if provider.execution_mode == "gateway" else None
     models = ({item["id"]: {"id": item["id"], "display_name": item["display_name"]} for item in gateway_info}
               if gateway_info is not None else _direct_models(config, provider, headers, timeout, budget))
     result = list(models.values())

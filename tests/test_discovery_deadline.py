@@ -86,9 +86,11 @@ def fixture_config(tmp_path, monkeypatch, base):
 
 
 @pytest.mark.parametrize("mode", ["headers", "body", "chunked"])
-def test_total_deadline_stops_trickling_http_without_leaking_timer(tmp_path, monkeypatch, mode):
+@pytest.mark.parametrize("execution_mode", ["direct", "gateway"])
+def test_total_deadline_stops_trickling_http_without_leaking_timer(tmp_path, monkeypatch, mode, execution_mode):
     with upstream(mode) as (base, _, active):
         config, provider = fixture_config(tmp_path, monkeypatch, base)
+        provider.execution_mode = execution_mode
         before = time.monotonic()
         with pytest.raises(Error) as error:
             catalog.fetch_models(config, provider, timeout=0.25)
@@ -204,12 +206,46 @@ def test_deadline_interrupts_a_stalled_tls_handshake(tmp_path, monkeypatch):
 
 
 
-def test_claude_pagination_shares_one_total_deadline(tmp_path, monkeypatch):
+@pytest.mark.parametrize("execution_mode", ["direct", "gateway"])
+def test_claude_pagination_shares_one_total_deadline(tmp_path, monkeypatch, execution_mode):
     with upstream("pages") as (base, _, _):
         config, provider = fixture_config(tmp_path, monkeypatch, base)
+        provider.execution_mode = execution_mode
         before = time.monotonic()
         with pytest.raises(Error) as error:
             catalog.fetch_models(config, provider, timeout=0.25)
         assert type(error.value).__name__ == "ClaudapterError"
         assert time.monotonic() - before < 1.5
         assert not (tmp_path / "cache.json").exists()
+
+
+@pytest.mark.parametrize("shorter", ["policy", "parent"])
+def test_gateway_shorter_policy_or_parent_stops_trickling_headers(tmp_path, monkeypatch, shorter):
+    with upstream("headers") as (base, _, active):
+        config, provider = fixture_config(tmp_path, monkeypatch, base)
+        provider.execution_mode = "gateway"
+        provider.gateway_runtime["catalog_policy_file"] = "catalog-policy.json"
+        (tmp_path / "catalog-policy.json").write_text(json.dumps({
+            "schema_version": 1, "base_url": base, "checked_at": "2026-10-29",
+            "evidence": "synthetic loopback fixture",
+            "policy": {"timeout": 0.25 if shorter == "policy" else 2},
+        }), encoding="utf-8")
+        parent = Deadline(0.25 if shorter == "parent" else 5)
+        try:
+            with parent:
+                started = time.monotonic()
+                with pytest.raises(Error):
+                    catalog.fetch_models(config, provider, timeout=2, budget=parent)
+                assert time.monotonic() - started < 1.5
+                if shorter == "policy":
+                    assert parent.timer.is_alive()
+        except TimeoutError:
+            # The caller-owned context also reports its own expired deadline.
+            assert shorter == "parent"
+        assert not parent.timer.is_alive()
+        assert not (tmp_path / "cache.json").exists()
+        end = time.monotonic() + 1
+        while active and time.monotonic() < end:
+            time.sleep(0.01)
+        assert not active
+        assert not any(t.name == "AdapterHTTPDeadline" for t in threading.enumerate())
