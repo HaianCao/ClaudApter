@@ -1,4 +1,5 @@
 import io
+import json
 from http.client import IncompleteRead
 from types import SimpleNamespace
 
@@ -27,6 +28,91 @@ def test_bad_cache_falls_back_without_parser_exception(tmp_path, monkeypatch, ra
     path.write_bytes(raw)
     monkeypatch.setattr(catalog, "cache_path", lambda *args: path)
     assert catalog.cached_models(config, provider) == ([], True)
+
+
+@pytest.mark.parametrize("raw", [*INVALID, b"[]", b"null"], ids=["huge-integer", "deep-nesting", "surrogate", "nan", "overflow", "truncated-json", "invalid-utf8", "array", "null"])
+def test_successful_refresh_replaces_bad_cache_and_survives_reopen(tmp_path, monkeypatch, raw):
+    config, provider = config_and_provider(tmp_path, monkeypatch)
+    path = tmp_path / "cache.json"
+    path.write_bytes(raw)
+    config.path.write_text("configuration sentinel", encoding="utf-8")
+    monkeypatch.setattr(catalog, "cache_path", lambda *args: path)
+    monkeypatch.setattr(catalog, "get_token", lambda *args, **kwargs: "synthetic-token")
+
+    def upstream(*args, **kwargs):
+        response = io.BytesIO(b'{"data":[{"id":"fixture-model","display_name":"Fixture Model"}]}')
+        response.headers = {}
+        return response
+
+    monkeypatch.setattr(catalog, "_OPENER", SimpleNamespace(open=upstream))
+    assert catalog.cached_models(config, provider) == ([], True)
+    models = catalog.fetch_models(config, provider)
+    reopened = Config(path=config.path)
+    assert catalog.cached_models(reopened, provider) == (models, False)
+    saved = path.read_text(encoding="utf-8")
+    assert json.loads(saved)[provider.id]["models"] == models
+    assert "synthetic-token" not in saved
+    assert config.path.read_text(encoding="utf-8") == "configuration sentinel"
+    assert not list(tmp_path.glob(".models-*.tmp"))
+
+
+def test_cache_update_preserves_other_provider_entries(tmp_path, monkeypatch):
+    config, provider = config_and_provider(tmp_path, monkeypatch)
+    path = tmp_path / "cache.json"
+    other = {"models": [{"id": "other-model", "display_name": "Other"}]}
+    path.write_text(json.dumps({"other": other}), encoding="utf-8")
+    monkeypatch.setattr(catalog, "cache_path", lambda *args: path)
+    catalog.store_catalog(config, provider.id, {"models": []})
+    assert json.loads(path.read_text(encoding="utf-8")) == {"other": other, provider.id: {"models": []}}
+
+
+def test_cache_read_permission_error_does_not_replace_existing_file(tmp_path, monkeypatch):
+    config, provider = config_and_provider(tmp_path, monkeypatch)
+    path = tmp_path / "cache.json"
+    original = b'{"other":{"models":[]}}'
+    path.write_bytes(original)
+    monkeypatch.setattr(catalog, "cache_path", lambda *args: path)
+    read_text = type(path).read_text
+
+    def unreadable(target, *args, **kwargs):
+        if target == path:
+            raise PermissionError("synthetic read failure")
+        return read_text(target, *args, **kwargs)
+
+    monkeypatch.setattr(type(path), "read_text", unreadable)
+    catalog.store_catalog(config, provider.id, {"models": []})
+    assert path.read_bytes() == original
+    assert not list(tmp_path.glob(".models-*.tmp"))
+
+
+@pytest.mark.parametrize("fail_replace", [False, True])
+def test_corrupt_cache_replacement_is_atomic_and_cleans_temporary_file(tmp_path, monkeypatch, fail_replace):
+    config, provider = config_and_provider(tmp_path, monkeypatch)
+    path = tmp_path / "cache.json"
+    original = b"{invalid"
+    path.write_bytes(original)
+    monkeypatch.setattr(catalog, "cache_path", lambda *args: path)
+    replace = catalog.os.replace
+    expected = {provider.id: {"models": []}}
+    attempted = []
+
+    def publish(source, target):
+        assert target == path
+        assert path.read_bytes() == original
+        assert json.loads(type(path)(source).read_text(encoding="utf-8")) == expected
+        attempted.append(source)
+        if fail_replace:
+            raise PermissionError("synthetic replace failure")
+        replace(source, target)
+
+    monkeypatch.setattr(catalog.os, "replace", publish)
+    catalog.store_catalog(config, provider.id, {"models": []})
+    assert len(attempted) == 1
+    if fail_replace:
+        assert path.read_bytes() == original
+    else:
+        assert json.loads(path.read_text(encoding="utf-8")) == expected
+    assert not list(tmp_path.glob(".models-*.tmp"))
 
 
 @pytest.mark.parametrize("raw", INVALID)

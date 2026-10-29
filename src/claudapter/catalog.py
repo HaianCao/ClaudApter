@@ -163,7 +163,12 @@ def store_catalog(config, provider_id, entry):
     try:
         with SettingsGuard(path).edit():
             path.parent.mkdir(parents=True, exist_ok=True)
-            existing = _decode_json(path.read_text(encoding="utf-8")) if path.exists() else {}
+            try:
+                existing = _decode_json(path.read_text(encoding="utf-8")) if path.exists() else {}
+            except ValueError:
+                # Invalid JSON/UTF-8 is disposable cache content. IO failures
+                # still leave this transaction through the outer handler.
+                existing = {}
             if not isinstance(existing, dict):
                 existing = {}
             existing[provider_id] = entry
