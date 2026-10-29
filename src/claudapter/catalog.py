@@ -233,7 +233,12 @@ def cached_models(config: Config, provider: Provider) -> tuple[list[dict[str, st
             return [], True
         if any(not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"] or not isinstance(item.get("display_name"), str) for item in entry["models"]):
             return [], True
-        return entry["models"], time.time() - float(entry.get("saved_at", 0)) > 86_400
+        saved_at, now = entry.get("saved_at"), time.time()
+        # The bounded comparison also rejects NaN/infinity and arbitrarily
+        # large JSON integers without a potentially overflowing float cast.
+        if type(saved_at) not in (int, float) or not 0 <= saved_at <= now:
+            return entry["models"], True
+        return entry["models"], now - saved_at > 86_400
     except (OSError, ValueError, TypeError, AttributeError, RecursionError):
         return [], True
 
