@@ -9,6 +9,7 @@ from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
+from .agent_models import validate_agent_models
 from .catalog import _identity, cached_models, fetch_models, store_catalog
 from .config import (
     EFFORTS,
@@ -42,6 +43,7 @@ def public_config(config: Config) -> dict:
     for provider in result["providers"]:
         provider["gateway_limits"] = config.providers[provider["id"]].gateway_limits
         provider["gateway_runtime"] = config.providers[provider["id"]].gateway_runtime
+        provider["agent_models"] = config.providers[provider["id"]].agent_models
     return result
 
 
@@ -255,6 +257,7 @@ def serve(config: Config) -> int:
                     provider = Provider(provider_id, display_name, validate_base_url(str(body.get("base_url", "")), protocol), mode, default_model, execution_mode, protocol, upstream_reasoning, capabilities_file, require_verified)
                     provider.gateway_limits = validate_gateway_limits(body.get("gateway_limits", old_provider.gateway_limits if old_provider else {}), execution_mode)
                     provider.gateway_runtime = validate_gateway_runtime(body.get("gateway_runtime", old_provider.gateway_runtime if old_provider else {}), execution_mode)
+                    provider.agent_models = validate_agent_models(body.get("agent_models", old_provider.agent_models if old_provider else {"policy": "selected"}))
                     updated = copy.deepcopy(config)
                     updated.providers[provider_id] = provider
                     persist_provider_change(config, updated, provider_id, str(body["api_key"]) if body.get("api_key") else None)

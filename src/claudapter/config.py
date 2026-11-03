@@ -26,6 +26,7 @@ class Provider:
     require_verified_capabilities: bool = False
     gateway_limits: dict = field(default_factory=dict)
     gateway_runtime: dict = field(default_factory=dict)
+    agent_models: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -133,6 +134,9 @@ def validate(config: Config) -> None:
             _text(getattr(provider, field_name), "provider." + field_name, required=field_name != "default_model")
         from .gateway_options import validate_gateway_limits
         validate_gateway_limits(provider.gateway_limits, provider.execution_mode)
+        from .agent_models import validate_agent_models
+
+        validate_agent_models(provider.agent_models)
         validate_capability_settings(provider.capabilities_file, provider.require_verified_capabilities, provider.execution_mode)
         if provider.id != provider_id or not provider.display_name.strip():
             raise ClaudapterError(f"Invalid provider: {provider_id}")
@@ -206,6 +210,10 @@ def save(config: Config) -> None:
             from .gateway_options import runtime_toml
 
             lines.append("gateway_runtime = " + runtime_toml(provider.gateway_runtime))
+        if provider.agent_models:
+            from .agent_models import agent_models_toml
+
+            lines.append("agent_models = " + agent_models_toml(provider.agent_models))
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:

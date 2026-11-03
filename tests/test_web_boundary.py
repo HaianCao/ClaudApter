@@ -129,7 +129,11 @@ def test_invalid_key_save_is_atomic_and_existing_bad_key_can_be_replaced(tmp_pat
 
 
 def test_missing_mcp_variable_keeps_setup_open_and_does_not_save_defaults(tmp_path, monkeypatch):
-    from claudapter import launcher
+    from claudapter import agent_models, launcher
+
+    # Newly added setup providers now select an explicit agent model policy.
+    # Keep this fake executable fixture verified so it reaches MCP validation.
+    monkeypatch.setattr(agent_models, "detect_version", lambda _: (2, 1, 308))
 
     mcp = tmp_path / "mcp.json"
     mcp.write_text(json.dumps({"mcpServers": {"fixture": {"command": sys.executable, "env_vars": ["MISSING_FIXTURE_VARIABLE"]}}}))

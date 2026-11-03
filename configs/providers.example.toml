@@ -15,6 +15,11 @@ default_model = "claude-model-id"
 protocol = "messages" # messages, chat or responses; non-Messages requires gateway
 execution_mode = "direct" # direct or gateway
 upstream_reasoning = "auto" # Automatic route compatibility; native Messages unchanged.
+# New setup providers default to selected; omitted on older configs means inherit.
+# Selected forces subagents/auxiliary aliases to the model chosen at launch.
+# agent_models = { policy = "selected" }
+# Custom keeps normal agent-definition precedence; blank roles use the launch model.
+# agent_models = { policy = "custom", default = "provider/worker", haiku = "provider/fast" }
 # Optional capability checks require execution_mode = "gateway".
 # capabilities_file = "capabilities.json" # relative to this config file
 # require_verified_capabilities = true

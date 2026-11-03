@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import os
 import secrets
 import shutil
 import subprocess
 from pathlib import Path
 
+from .agent_models import agent_environment
 from .command import command_prefix
 from .config import (
     EFFORTS,
@@ -72,12 +74,17 @@ def build_invocation(config: Config, provider: Provider, model: str, effort: str
         env["ANTHROPIC_BASE_URL"] = claude_base_url(provider.base_url)
         env["ANTHROPIC_AUTH_TOKEN" if provider.auth_mode == "bearer" else "ANTHROPIC_API_KEY"] = token
     args = [*prefix, "--model", model]
+    managed_agents = agent_environment(prefix, provider.agent_models, model)
+    env.update(managed_agents)
+    settings = {"env": managed_agents} if managed_agents else {}
     if cross_protocol:
         # Scope compatibility settings to this child process, never user files.
         env.update(cross_protocol_environment(prefix))
     if cross_protocol or provider.upstream_reasoning not in ("auto", "provider_default"):
         env.update({"MAX_THINKING_TOKENS": "0", "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING": "1"})
-        args += ["--settings", '{"alwaysThinkingEnabled":false}']
+        settings["alwaysThinkingEnabled"] = False
+    if settings:
+        args += ["--settings", json.dumps(settings)]
     if effort != "default":
         args += ["--effort", effort]
     if mode == "print":
