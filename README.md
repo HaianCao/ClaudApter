@@ -142,6 +142,15 @@ If Claude Code's `/status` shows a different gateway or credential from the one 
 
 ## Session tools
 
+The integration preview has a local-fixture check for one foreground subagent
+using the selected provider/model on Claude Code **2.1.308**, through native
+Messages or translated Chat/Responses. It verifies a separate child request,
+a successful read-only tool result and completion reported by the harness.
+Choose the **selected** agent-model policy to keep the same-model default.
+This is harness interoperability evidence, not a guarantee for every provider.
+Concurrent, nested, detached and different-model agents need separate checks;
+custom agent definitions and explicit overrides retain Claude Code precedence.
+
 External stdio MCP servers can be selected for one launch with
 `CLAUDE_CA_MCP_CONFIG`: a JSON file with `mcpServers`, each containing an absolute
 executable `command`, optional `args`, and `env_vars` names. Claude loads only
