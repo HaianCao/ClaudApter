@@ -19,6 +19,7 @@ from .config import (
 from .credentials import get_token, validate_token
 from .errors import ClaudapterError
 from .gateway_options import runtime_options, session_options, validate_gateway_limits
+from .harness import cross_protocol_environment
 from .mcp import environment_references, load_servers, session_arguments
 
 
@@ -73,8 +74,7 @@ def build_invocation(config: Config, provider: Provider, model: str, effort: str
     args = [*prefix, "--model", model]
     if cross_protocol:
         # Scope compatibility settings to this child process, never user files.
-        env.update({"CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1", "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS": "1",
-                    "DISABLE_PROMPT_CACHING": "1", "ENABLE_TOOL_SEARCH": "false"})
+        env.update(cross_protocol_environment(prefix))
     if cross_protocol or provider.upstream_reasoning not in ("auto", "provider_default"):
         env.update({"MAX_THINKING_TOKENS": "0", "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING": "1"})
         args += ["--settings", '{"alwaysThinkingEnabled":false}']
