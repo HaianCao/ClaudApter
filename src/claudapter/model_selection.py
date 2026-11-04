@@ -5,8 +5,29 @@ from pathlib import Path
 from .config import claude_base_url, config_path
 
 
+def _fallback_status(provider):
+    runtime = provider.gateway_runtime if provider else {}
+    preflight = runtime.get("context_preflight", "off") or "off"
+    count_mode = runtime.get("token_count_mode", "off") or "off"
+    protocol = getattr(provider, "protocol", "messages")
+    if count_mode == "native":
+        count_category = "exact" if protocol in ("messages", "responses") else "unavailable"
+    elif count_mode == "estimate" or preflight in ("estimate", "reject_estimate"):
+        count_category = "estimate"
+    else:
+        count_category = "unavailable"
+    return {
+        "status": "unverified",
+        "message": f"Unverified route. Model discovery is not capability certification. Token count: {count_category}; context window: unavailable.",
+        "context_preflight": preflight,
+        "token_count_mode": count_mode,
+        "count_category": count_category,
+        "context_window_tokens": None,
+    }
+
+
 def model_status(config, provider, model):
-    unknown = {"status": "unverified", "message": "Unverified route. Model discovery is not capability certification."}
+    unknown = _fallback_status(provider)
     if not model or not provider.capabilities_file:
         return unknown
     try:
