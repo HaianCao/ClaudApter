@@ -95,7 +95,11 @@
     const generation=fetchGeneration;
     api('/api/models?provider='+encodeURIComponent(p.id)).then(data=>{if(generation===fetchGeneration){catalog=data.models||[];renderResults();if(catalog.length&&data.stale)notify('Showing cached models while refreshing…')}}).catch(()=>{}).finally(()=>{if(p.has_key&&generation===fetchGeneration)refresh()});
   }
+  const routeHint=document.createElement('p');routeHint.id='modelStatus';routeHint.className='hint';routeHint.setAttribute('role','status');$('catalogHint').after(routeHint);
+  let routeGeneration=0,routeTimer;
+  function updateModelStatus(){const ticket=++routeGeneration;clearTimeout(routeTimer);const p=selected(),model=$('model').value.trim();routeHint.textContent=p?'Unverified route. Model discovery is not capability certification.':'';if(!p||!model)return;routeTimer=setTimeout(async()=>{try{const result=await api('/api/model-status?provider='+encodeURIComponent(p.id)+'&model='+encodeURIComponent(model));if(ticket===routeGeneration)routeHint.textContent=result.message;}catch{}},180);}
   function renderResults(){
+    updateModelStatus();
     const box=$('results');box.replaceChildren();const p=selected();if(!p){$('catalogHint').textContent='';return}
     const query=$('model').value.trim().toLowerCase();const matches=catalog.filter(item=>item.id.toLowerCase().includes(query)||item.display_name.toLowerCase().includes(query));
     for(const item of matches){const button=document.createElement('button');button.type='button';button.className='model-option';button.setAttribute('role','option');button.textContent=item.display_name;const id=document.createElement('small');id.textContent=item.id;button.append(id);button.onclick=()=>{$('model').value=item.id;renderResults();$('model').focus()};box.append(button)}

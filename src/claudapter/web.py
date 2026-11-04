@@ -183,6 +183,15 @@ def serve(config: Config) -> int:
                         provider = self._provider(parse_qs(parsed.query).get("provider", [""])[0])
                     models, stale = cached_models(config, provider)
                     self._json({"models": models, "stale": stale})
+                elif parsed.path == "/api/model-status":
+                    from .model_selection import model_status
+
+                    query = parse_qs(parsed.query)
+                    provider = self._provider(query.get("provider", [""])[0])
+                    model = query.get("model", [""])[0]
+                    if len(model) > 512:
+                        raise ClaudapterError("Model ID is too long.")
+                    self._json(model_status(config, provider, model))
                 else:
                     self._json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
             except (ClaudapterError, OSError) as exc:
@@ -280,10 +289,6 @@ def serve(config: Config) -> int:
                     model = str(body.get("model", "")).strip()
                     effort = str(body.get("effort", "default"))
                     preflight(config, provider, model, effort)
-                    updated = copy.deepcopy(config)
-                    updated.default_provider, updated.default_model, updated.default_effort = provider.id, model, effort
-                    save(updated)
-                    config.default_provider, config.default_model, config.default_effort = provider.id, model, effort
                     requested_run = provider, model, effort
                     self._json({"ready": True})
                     threading.Thread(target=server.shutdown, daemon=True).start()

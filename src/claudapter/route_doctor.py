@@ -13,7 +13,7 @@ def route_doctor(config, provider, model, *, allow_live=False, checks=None, repo
     try:
         from protoverta.certification import CASES, check_route, evidence_report
 
-        gateway, _ = _gateway(config, provider)
+        gateway, _ = _gateway(config, provider, model)
         if not allow_live:
             return [{"case": "route", "passed": False, "outcome": "not_tested_use_allow_live", "requests": 0, "duration_ms": 0}]
         results = check_route(gateway, model, "messages", cases=tuple(checks or CASES), allow_live=True)

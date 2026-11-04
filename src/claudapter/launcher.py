@@ -77,6 +77,16 @@ def build_invocation(config: Config, provider: Provider, model: str, effort: str
     managed_agents = agent_environment(prefix, provider.agent_models, model)
     env.update(managed_agents)
     settings = {"env": managed_agents} if managed_agents else {}
+    if provider.execution_mode == "gateway":
+        from .harness import detect_version
+
+        if detect_version(prefix) == (2, 1, 308):
+            from .catalog import cached_model_names
+
+            identifiers = tuple(dict.fromkeys((model,) + tuple(value for key, value in provider.agent_models.items() if key != "policy")))
+            names = cached_model_names(config, provider, identifiers, token=token)
+            settings["modelPicker"] = {"replaceBuiltInOptions": True, "options": [
+                {"model": mid, "label": names.get(mid, mid), "description": "Session model; capabilities are checked separately."} for mid in identifiers]}
     if cross_protocol:
         # Scope compatibility settings to this child process, never user files.
         env.update(cross_protocol_environment(prefix))
@@ -105,7 +115,7 @@ def build_invocation(config: Config, provider: Provider, model: str, effort: str
     return args, env
 
 
-def _gateway(config: Config, provider: Provider):
+def _gateway(config: Config, provider: Provider, model: str | None = None):
     try:
         from protoverta.core import Protocol
         from protoverta.server import GatewayConfig, gateway_session
@@ -115,6 +125,16 @@ def _gateway(config: Config, provider: Provider):
         upstream = Protocol(provider.protocol)
         base_url = (claude_base_url(provider.base_url) + "/v1" if upstream == Protocol.MESSAGES else provider.base_url.rstrip("/"))
         options = {} if upstream == Protocol.MESSAGES else {"client_profile": "claude", "messages_usage_policy": "deferred"}
+        if model is not None:
+            from protoverta.model_snapshot import ModelSnapshot, SnapshotModel
+
+            from .agent_models import validate_agent_models
+            from .catalog import cached_model_names
+
+            policy = validate_agent_models(provider.agent_models)
+            identifiers = (model,) + tuple(value for key, value in policy.items() if key != "policy")
+            names = cached_model_names(config, provider, identifiers)
+            options["model_snapshot"] = ModelSnapshot(base_url, upstream, tuple(SnapshotModel(mid, names.get(mid, mid)) for mid in dict.fromkeys(identifiers)))
         options.update(runtime_options(provider.gateway_runtime, provider.execution_mode, config.path or config_path()))
         options.update(validate_gateway_limits(provider.gateway_limits, provider.execution_mode))
         capabilities_file, required = validate_capability_settings(provider.capabilities_file, provider.require_verified_capabilities, provider.execution_mode)
@@ -158,7 +178,7 @@ def _verify_capabilities(gateway, model: str, effort: str) -> None:
 
 def preflight(config: Config, provider: Provider, model: str, effort: str) -> None:
     if provider.execution_mode == "gateway":
-        gateway, _ = _gateway(config, provider)
+        gateway, _ = _gateway(config, provider, model)
         _verify_capabilities(gateway, model, effort)
         build_invocation(config, provider, model, effort, [], gateway_url="http://127.0.0.1:0", gateway_token="preflight")
     else:
@@ -178,7 +198,7 @@ def launch(config: Config, provider: Provider, model: str, effort: str, extra: l
 
     try:
         if provider.execution_mode == "gateway":
-            gateway, gateway_session = _gateway(config, provider)
+            gateway, gateway_session = _gateway(config, provider, model)
             _verify_capabilities(gateway, model, effort)
             with session_options(config.path or config_path(), provider) as observer_options, gateway_session(gateway, **observer_options) as origin:
                 args, env = build_invocation(config, provider, model, effort, extra, mode, gateway_url=origin, gateway_token=gateway.inbound_token)

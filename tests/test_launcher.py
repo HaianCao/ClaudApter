@@ -65,6 +65,7 @@ class LauncherTests(unittest.TestCase):
 
             class GatewayConfig:
                 def __init__(self, upstream, base_url, key, inbound_token, auth_style, **policy):
+                    assert policy.pop("model_snapshot") == (base_url, upstream, (("claude-demo", "claude-demo"),))
                     assert policy == {"upstream_reasoning": "provider_default"}
                     self.inbound_token = inbound_token
                     events.append((upstream, base_url, key, auth_style))
@@ -84,7 +85,10 @@ class LauncherTests(unittest.TestCase):
             server = types.ModuleType("protoverta.server")
             server.GatewayConfig = GatewayConfig
             server.gateway_session = gateway_session
-            with patch.dict(sys.modules, {"protoverta": package, "protoverta.core": core, "protoverta.server": server}), patch(
+            snapshot = types.ModuleType("protoverta.model_snapshot")
+            snapshot.ModelSnapshot = lambda base, protocol, entries: (base, protocol, entries)
+            snapshot.SnapshotModel = lambda mid, name: (mid, name)
+            with patch.dict(sys.modules, {"protoverta": package, "protoverta.core": core, "protoverta.server": server, "protoverta.model_snapshot": snapshot}), patch(
                 "claudapter.launcher.shutil.which", return_value="claude.exe"
             ), patch("claudapter.launcher.subprocess.run", return_value=types.SimpleNamespace(returncode=3)) as run:
                 self.assertEqual(launch(config, p, "claude-demo", "default", []), 3)

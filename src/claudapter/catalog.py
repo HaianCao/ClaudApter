@@ -225,6 +225,31 @@ def fetch_models(config: Config, provider: Provider, *, timeout=12, cache_sink=N
     return result
 
 
+def cached_model_names(config, provider, identifiers, *, token=_UNSET):
+    """Read display names, never capabilities or extra advertised IDs."""
+    try:
+        with cache_path(config).open("rb") as source:
+            raw = source.read(8 * 1024 * 1024 + 1)
+        if len(raw) > 8 * 1024 * 1024:
+            return {}
+        entry = _decode_json(raw).get(provider.id, {})
+        if entry.get("identity") != _identity(config, provider, token=token):
+            return {}
+        saved, now = entry.get("saved_at"), time.time()
+        if type(saved) not in (int, float) or not 0 <= saved <= now or now - saved > 86400:
+            return {}
+        info = entry.get("models", [])
+        if not isinstance(info, list) or len(info) > 10000:
+            return {}
+        wanted = set(identifiers)
+        return {item["id"]: item["display_name"] for item in info if isinstance(item, dict)
+                and isinstance(item.get("id"), str) and item["id"] in wanted
+                and isinstance(item.get("display_name"), str) and 1 <= len(item["display_name"]) <= 512
+                and not any(ord(c) < 32 or ord(c) == 127 or 0xD800 <= ord(c) <= 0xDFFF for c in item["display_name"])}
+    except (OSError, ValueError, TypeError, AttributeError, RecursionError):
+        return {}
+
+
 def cached_models(config: Config, provider: Provider) -> tuple[list[dict[str, str]], bool]:
     try:
         data = _decode_json(cache_path(config).read_text(encoding="utf-8"))
