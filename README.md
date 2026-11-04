@@ -147,8 +147,12 @@ using the selected provider/model on Claude Code **2.1.308**, through native
 Messages or translated Chat/Responses. It verifies a separate child request,
 a successful read-only tool result and completion reported by the harness.
 Choose the **selected** agent-model policy to keep the same-model default.
+The **custom** policy can select an exact child model on that same provider.
+Local fixtures verify model B tool use and continuation through `SendMessage`
+while the parent keeps model A. Known capability/effort/budget limits are checked
+against each requested model; missing evidence follows the configured verification policy.
 This is harness interoperability evidence, not a guarantee for every provider.
-Concurrent, nested, detached and different-model agents need separate checks;
+Detached execution and closed/persisted child resume need separate checks;
 custom agent definitions and explicit overrides retain Claude Code precedence.
 
 External stdio MCP servers can be selected for one launch with
