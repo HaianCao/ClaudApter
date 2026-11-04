@@ -11,6 +11,7 @@ from claudapter.http_deadline import Deadline
 
 
 def fixture(tmp_path, monkeypatch, policy_timeout=None):
+    pytest.importorskip("protoverta.discovery")
     provider = Provider("fixture", "Fixture", "https://example.invalid/v1", protocol="messages", execution_mode="gateway")
     config = Config(providers={provider.id: provider}, path=tmp_path / "config.toml")
     if policy_timeout is not None:

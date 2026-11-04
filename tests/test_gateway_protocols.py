@@ -86,6 +86,7 @@ def test_gateway_passes_explicit_prefix_and_compatibility_policy(tmp_path, proto
 
 @pytest.mark.parametrize("protocol", ["chat", "responses"])
 def test_discovery_does_not_send_anthropic_query_or_headers(tmp_path, protocol):
+    pytest.importorskip("protoverta.discovery")
     provider = Provider("demo", "Demo", "https://example.test/api/v4", execution_mode="gateway", protocol=protocol)
     config = Config({"demo": provider}, path=tmp_path / "config.toml")
     from protoverta.discovery import ModelInfo

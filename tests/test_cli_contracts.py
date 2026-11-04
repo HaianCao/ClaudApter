@@ -47,7 +47,7 @@ def test_cli_contains_launch_failure_and_interrupt(configured, monkeypatch, erro
 
 
 def test_route_doctor_opt_in_is_required_before_dispatch(configured, monkeypatch):
-    from protoverta import certification
+    certification = pytest.importorskip("protoverta.certification")
 
     from claudapter import route_doctor
 
@@ -62,7 +62,7 @@ def test_route_doctor_opt_in_is_required_before_dispatch(configured, monkeypatch
 
 
 def test_route_doctor_does_not_overwrite_report(configured, monkeypatch, tmp_path):
-    from protoverta import certification
+    certification = pytest.importorskip("protoverta.certification")
 
     from claudapter import route_doctor
 

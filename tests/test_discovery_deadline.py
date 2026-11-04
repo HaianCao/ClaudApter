@@ -106,6 +106,8 @@ def test_total_deadline_stops_trickling_http_without_leaking_timer(tmp_path, mon
 
 @pytest.mark.parametrize("mode", ["direct", "gateway"])
 def test_explicit_cancellation_closes_active_response(tmp_path, monkeypatch, mode):
+    if mode == "gateway":
+        pytest.importorskip("protoverta.discovery")
     with upstream("body") as (base, started, active):
         config, provider = fixture_config(tmp_path, monkeypatch, base)
         provider.execution_mode = mode

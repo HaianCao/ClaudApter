@@ -3,17 +3,30 @@ on: [push, pull_request]
 permissions:
   contents: read
 jobs:
+  workflow-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: false
+      - run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -color
+
   test:
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         gateway: [false, true]
+        python-version: ['3.11', '3.13']
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python-version }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -39,8 +52,25 @@ jobs:
         run: |
           python -c "from protoverta.server import GatewayConfig; import dataclasses; assert {'retry_attempts','shared_admission_db','client_tool_search','provider_profiles'} <= {f.name for f in dataclasses.fields(GatewayConfig)}"
           if ($LASTEXITCODE) { throw 'Incompatible gateway runtime' }
-          python -c "import xml.etree.ElementTree as E; skipped=[t.attrib for t in E.parse('test-results.xml').iter('testcase') if t.find('skipped') is not None and any(n in t.get('classname','') for n in ('test_gateway_limits','test_gateway_runtime'))]; assert not skipped, skipped"
+          python scripts/check_test_report.py test-results.xml
+      - name: Direct-only test evidence permits optional gateway skips
+        if: ${{ !matrix.gateway }}
+        run: python scripts/check_test_report.py test-results.xml --allow-skips
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: claude-tests-${{ matrix.python-version }}-gateway-${{ matrix.gateway }}
+          path: test-results.xml
       - name: Check PowerShell syntax
+        shell: powershell
+        run: |
+          foreach ($file in @('scripts/install.ps1', 'scripts/install-environment.ps1', 'scripts/uninstall.ps1')) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) { throw "$file has PowerShell parse errors: $errors" }
+          }
+      - name: Check PowerShell 7 syntax
         shell: pwsh
         run: |
           foreach ($file in @('scripts/install.ps1', 'scripts/install-environment.ps1', 'scripts/uninstall.ps1')) {

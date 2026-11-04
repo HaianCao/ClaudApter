@@ -3,6 +3,7 @@
 import importlib
 import io
 import json
+from contextlib import ExitStack
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -16,6 +17,7 @@ credentials = importlib.import_module(PACKAGE + ".credentials")
 
 @pytest.mark.parametrize("mode", ["direct", "gateway"])
 def test_cache_entry_identity_uses_the_original_request_credential(tmp_path, monkeypatch, mode):
+    discovery = pytest.importorskip("protoverta.discovery") if mode == "gateway" else None
     codex = PACKAGE == "codex_adapter"
     prefix = "CODEX_CA" if codex else "CLAUDE_CA"
     monkeypatch.setenv(prefix + "_ENV_FILE", str(tmp_path / ".env"))
@@ -58,7 +60,10 @@ def test_cache_entry_identity_uses_the_original_request_credential(tmp_path, mon
         store("synthetic-replacement")
         return [SimpleNamespace(as_dict=lambda: {"id": "m", "display_name": "M"})]
 
-    with patch("protoverta.discovery.fetch_catalog", side_effect=gateway_request), patch.object(catalog, "_open" if codex else "_OPENER") as opener:
+    with ExitStack() as stack:
+        if discovery is not None:
+            stack.enter_context(patch.object(discovery, "fetch_catalog", side_effect=gateway_request))
+        opener = stack.enter_context(patch.object(catalog, "_open" if codex else "_OPENER"))
         if codex:
             opener.side_effect = open_request
         else:

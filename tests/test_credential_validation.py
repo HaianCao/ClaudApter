@@ -31,6 +31,8 @@ def test_control_characters_rejected_without_changing_saved_key(tmp_path, monkey
 @pytest.mark.parametrize("mode", ["direct", "gateway"])
 @pytest.mark.parametrize("source", ["file", "environment"])
 def test_invalid_existing_key_fails_preflight_and_discovery_but_setup_can_recover(tmp_path, monkeypatch, mode, source):
+    if mode == "gateway":
+        pytest.importorskip("protoverta")
     path = tmp_path / ".env"
     monkeypatch.setenv("CLAUDE_CA_ENV_FILE", str(path))
     name = secret_var("fixture")
