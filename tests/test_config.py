@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -26,6 +27,18 @@ class ConfigTests(unittest.TestCase):
             save(config)
             self.assertNotIn("\x7f", path.read_text(encoding="utf-8"))
             self.assertEqual(load(path), config)
+
+    def test_saved_key_wins_over_stale_environment_variable(self):
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as directory:
+            config = Config({"demo": Provider("demo", "Demo", "https://example.test/api", "bearer", "m")}, "demo", "m", "default", Path(directory) / "config.toml")
+            name = secret_var("demo")
+            with patch.dict("os.environ", {name: "stale-key"}):
+                os.environ.pop("CLAUDE_CA_ENV_FILE", None)
+                self.assertEqual(get_token(config, "demo"), "stale-key")
+                store_token(config, "demo", "saved-key")
+                self.assertEqual(get_token(config, "demo"), "saved-key")
 
     def test_round_trip_and_secret_separation(self):
         with tempfile.TemporaryDirectory() as directory:
