@@ -9,9 +9,7 @@ from claudapter import catalog
 from claudapter.config import Config, Provider
 from claudapter.errors import ClaudapterError
 
-INVALID = [b'{"x":' + b'1' * 5000 + b'}',
-           b'{"x":' + b'[' * 10000 + b'0' + b']' * 10000 + b'}',
-           b'{"x":"\\ud800"}', b'{"x":NaN}', b'{"x":1e309}', b'{', b'\xff']
+INVALID = [b'{"x":' + b"1" * 5000 + b"}", b'{"x":' + b"[" * 10000 + b"0" + b"]" * 10000 + b"}", b'{"x":"\\ud800"}', b'{"x":NaN}', b'{"x":1e309}', b"{", b"\xff"]
 
 
 def config_and_provider(tmp_path, monkeypatch):
@@ -30,15 +28,47 @@ def test_bad_cache_falls_back_without_parser_exception(tmp_path, monkeypatch, ra
     assert catalog.cached_models(config, provider) == ([], True)
 
 
-@pytest.mark.parametrize("saved_at,stale", [
-    (1_700_000_000, False), (1_699_999_999.5, False),
-    (1_700_000_000 - 86_400, False), (1_700_000_000 - 86_401, True),
-    ("nan", True), ("inf", True), ("-inf", True), ("1700000000", True),
-    (True, True), (False, True), (None, True), ([], True), ({}, True),
-    (-1, True), (-0.5, True), (1_700_000_001, True), (10 ** 500, True),
-], ids=["fresh-int", "fresh-float", "ttl-boundary", "expired", "nan-string", "inf-string",
-        "negative-inf-string", "numeric-string", "true", "false", "null", "array", "object",
-        "negative-int", "negative-float", "future", "huge-int"])
+@pytest.mark.parametrize(
+    "saved_at,stale",
+    [
+        (1_700_000_000, False),
+        (1_699_999_999.5, False),
+        (1_700_000_000 - 86_400, False),
+        (1_700_000_000 - 86_401, True),
+        ("nan", True),
+        ("inf", True),
+        ("-inf", True),
+        ("1700000000", True),
+        (True, True),
+        (False, True),
+        (None, True),
+        ([], True),
+        ({}, True),
+        (-1, True),
+        (-0.5, True),
+        (1_700_000_001, True),
+        (10**500, True),
+    ],
+    ids=[
+        "fresh-int",
+        "fresh-float",
+        "ttl-boundary",
+        "expired",
+        "nan-string",
+        "inf-string",
+        "negative-inf-string",
+        "numeric-string",
+        "true",
+        "false",
+        "null",
+        "array",
+        "object",
+        "negative-int",
+        "negative-float",
+        "future",
+        "huge-int",
+    ],
+)
 def test_cache_timestamp_validation_preserves_models_but_marks_invalid_age_stale(tmp_path, monkeypatch, saved_at, stale):
     config, provider = config_and_provider(tmp_path, monkeypatch)
     path = tmp_path / "cache.json"
@@ -69,7 +99,9 @@ def test_nonfinite_json_timestamp_still_rejects_entire_invalid_json_cache(tmp_pa
     assert catalog.cached_models(config, provider) == ([], True)
 
 
-@pytest.mark.parametrize("raw", [*INVALID, b"[]", b"null"], ids=["huge-integer", "deep-nesting", "surrogate", "nan", "overflow", "truncated-json", "invalid-utf8", "array", "null"])
+@pytest.mark.parametrize(
+    "raw", [*INVALID, b"[]", b"null"], ids=["huge-integer", "deep-nesting", "surrogate", "nan", "overflow", "truncated-json", "invalid-utf8", "array", "null"]
+)
 def test_successful_refresh_replaces_bad_cache_and_survives_reopen(tmp_path, monkeypatch, raw):
     config, provider = config_and_provider(tmp_path, monkeypatch)
     path = tmp_path / "cache.json"

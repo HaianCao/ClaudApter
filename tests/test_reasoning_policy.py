@@ -18,6 +18,7 @@ def test_policy_persistence_and_gateway(tmp_path):
     restored = load(config.path)
     assert restored.providers["demo"].upstream_reasoning == "openrouter_disabled"
     assert public_config(restored)["providers"][0]["upstream_reasoning"] == "openrouter_disabled"
+
     class Protocol(StrEnum):
         MESSAGES = "messages"
         CHAT = "chat"
@@ -43,7 +44,11 @@ def test_direct_policy_is_rejected(tmp_path):
 
 def test_native_reasoning_override_does_not_disable_unrelated_features():
     provider = Provider("demo", "Demo", "https://example.test", execution_mode="gateway", upstream_reasoning="disabled")
-    with patch.dict("os.environ", {}, clear=True), patch("claudapter.launcher.shutil.which", return_value="claude.exe"), patch("claudapter.launcher.get_token", return_value="fake"):
+    with (
+        patch.dict("os.environ", {}, clear=True),
+        patch("claudapter.launcher.shutil.which", return_value="claude.exe"),
+        patch("claudapter.launcher.get_token", return_value="fake"),
+    ):
         args, env = build_invocation(Config(), provider, "m", "default", [], gateway_url="http://127.0.0.1:8765", gateway_token="local")
     assert env["MAX_THINKING_TOKENS"] == "0"
     assert "--settings" in args
@@ -52,7 +57,15 @@ def test_native_reasoning_override_does_not_disable_unrelated_features():
     assert "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS" not in env
 
 
-@pytest.mark.parametrize("protocol,base,policy", [("messages", "https://example.test/v1", "provider_default"), ("chat", "https://openrouter.ai/api/v1", "openrouter_disabled"), ("chat", "https://openrouter.ai.evil.test/api/v1", "disabled"), ("responses", "https://example.test/v1", "disabled")])
+@pytest.mark.parametrize(
+    "protocol,base,policy",
+    [
+        ("messages", "https://example.test/v1", "provider_default"),
+        ("chat", "https://openrouter.ai/api/v1", "openrouter_disabled"),
+        ("chat", "https://openrouter.ai.evil.test/api/v1", "disabled"),
+        ("responses", "https://example.test/v1", "disabled"),
+    ],
+)
 def test_auto_reasoning_uses_exact_route_and_endpoint(tmp_path, monkeypatch, protocol, base, policy):
     pytest.importorskip("protoverta.automatic_reasoning")
     provider = Provider("demo", "Demo", base, protocol=protocol, execution_mode="gateway", upstream_reasoning="auto")

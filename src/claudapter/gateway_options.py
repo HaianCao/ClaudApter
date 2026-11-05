@@ -17,7 +17,11 @@ def validate_gateway_limits(value, mode):
     if value and mode != "gateway":
         raise ClaudapterError("Gateway runtime limits require gateway mode.")
     for key, number in value.items():
-        valid = (type(number) is int and number > 0) if key in COUNTS else (not isinstance(number, bool) and isinstance(number, int | float) and math.isfinite(number) and number > 0)
+        valid = (
+            (type(number) is int and number > 0)
+            if key in COUNTS
+            else (not isinstance(number, bool) and isinstance(number, int | float) and math.isfinite(number) and number > 0)
+        )
         if not valid:
             raise ClaudapterError("Gateway runtime limits must be finite positive numbers; byte/item/concurrency limits must be integers.")
     return dict(value)
@@ -46,7 +50,13 @@ def validate_gateway_runtime(value, mode):
         elif key in labels:
             valid = isinstance(option, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_./:-]{0,127}", option) is not None
         elif key in choices:
-            valid = isinstance(option, str) and option in (("off", "ephemeral") if key == "prompt_caching" else ("off", "estimate", "native") if key == "token_count_mode" else ("off", "estimate", "reject_estimate"))
+            valid = isinstance(option, str) and option in (
+                ("off", "ephemeral")
+                if key == "prompt_caching"
+                else ("off", "estimate", "native")
+                if key == "token_count_mode"
+                else ("off", "estimate", "reject_estimate")
+            )
         elif key in counts:
             valid = type(option) is int and option > 0 and (key != "retry_attempts" or option <= 4)
         else:
@@ -135,4 +145,5 @@ def session_options(config_file, provider):
                     yield {}  # Optional diagnostics cannot prevent CLI startup.
                 else:
                     yield {"observer": observer}
+
     return options()

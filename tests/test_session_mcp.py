@@ -10,7 +10,9 @@ from claudapter.mcp import environment_references, load_servers, session_argumen
 
 def config(tmp_path):
     path = tmp_path / "servers.json"
-    path.write_text(json.dumps({"mcpServers": {"search": {"command": sys.executable, "args": ["-m", "example"], "env_vars": ["SEARCH_TOKEN"]}}}), encoding="utf-8")
+    path.write_text(
+        json.dumps({"mcpServers": {"search": {"command": sys.executable, "args": ["-m", "example"], "env_vars": ["SEARCH_TOKEN"]}}}), encoding="utf-8"
+    )
     return str(path)
 
 

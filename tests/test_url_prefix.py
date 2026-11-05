@@ -28,7 +28,7 @@ def test_nested_prefix_survives_save_reload_and_request_join(tmp_path):
 
 
 def test_setup_shows_persistent_url_example_and_bearer_recommendation():
-    assert '<code>https://provider.example/v1</code>' in _HTML
-    assert 'Bearer token (recommended)' in _HTML
-    assert 'without the Bearer prefix' in _HTML
-    assert 'Enter the URL before /v1' not in _HTML
+    assert "<code>https://provider.example/v1</code>" in _HTML
+    assert "Bearer token (recommended)" in _HTML
+    assert "without the Bearer prefix" in _HTML
+    assert "Enter the URL before /v1" not in _HTML

@@ -14,9 +14,18 @@ def make_config(tmp_path, options):
     return config, provider
 
 
-@pytest.mark.parametrize("options", [{}, {"policy": "inherit"}, {"policy": "selected"}, {"policy": "custom", "default": "provider/worker", "haiku": "provider/fast", "fable": "provider/other"}])
+@pytest.mark.parametrize(
+    "options",
+    [
+        {},
+        {"policy": "inherit"},
+        {"policy": "selected"},
+        {"policy": "custom", "default": "provider/worker", "haiku": "provider/fast", "fable": "provider/other"},
+    ],
+)
 def test_config_roundtrip_and_public_snapshot(tmp_path, monkeypatch, options):
     from claudapter import web
+
     monkeypatch.setattr(web, "get_token", lambda *_: None)
     config, _ = make_config(tmp_path, options)
     save(config)
@@ -27,12 +36,28 @@ def test_config_roundtrip_and_public_snapshot(tmp_path, monkeypatch, options):
         assert "agent_models" not in config.path.read_text(encoding="utf-8")
 
 
-@pytest.mark.parametrize("value", [None, [], True, "selected", {"policy": []}, {"policy": "bad"},
-    {"policy": "inherit", "default": "m"}, {"policy": "selected", "default": "m"},
-    {"policy": "custom"}, {"policy": "custom", "default": ""}, {"policy": "custom", "default": "bad model"},
-    {"policy": "custom", "default": "a\x00b"}, {"policy": "custom", "default": chr(0xD800)},
-    {"policy": "custom", "default": "x" * 513}, {"unknown": "x"},
-    {"policy": "custom", "default": "haiku"}, {"policy": "custom", "effort": "high"}])
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        [],
+        True,
+        "selected",
+        {"policy": []},
+        {"policy": "bad"},
+        {"policy": "inherit", "default": "m"},
+        {"policy": "selected", "default": "m"},
+        {"policy": "custom"},
+        {"policy": "custom", "default": ""},
+        {"policy": "custom", "default": "bad model"},
+        {"policy": "custom", "default": "a\x00b"},
+        {"policy": "custom", "default": chr(0xD800)},
+        {"policy": "custom", "default": "x" * 513},
+        {"unknown": "x"},
+        {"policy": "custom", "default": "haiku"},
+        {"policy": "custom", "effort": "high"},
+    ],
+)
 def test_invalid_policy_never_overwrites_config(tmp_path, value):
     config, provider = make_config(tmp_path, {})
     save(config)
@@ -48,7 +73,7 @@ def test_legacy_missing_policy_is_preserved(tmp_path):
     save(config)
     loaded = load(config.path)
     assert loaded.providers["fixture"].agent_models == {}
-    monkey_options = agent_models.agent_environment([], {}, 'selected')
+    monkey_options = agent_models.agent_environment([], {}, "selected")
     assert monkey_options == {}
 
 
@@ -87,8 +112,9 @@ def test_selected_policy_is_child_only_and_keeps_auth_and_main_effort(tmp_path, 
         provider.protocol = "chat"
         monkeypatch.setattr(launcher, "cross_protocol_environment", lambda _: {})
     before = dict(os.environ)
-    args, env = launcher.build_invocation(config, provider, "provider/selected", "high", [],
-        **({"gateway_url": "http://127.0.0.1:4567", "gateway_token": "synthetic-local"} if gateway else {}))
+    args, env = launcher.build_invocation(
+        config, provider, "provider/selected", "high", [], **({"gateway_url": "http://127.0.0.1:4567", "gateway_token": "synthetic-local"} if gateway else {})
+    )
     assert os.environ == before
     assert env["UNRELATED_SETTING"] == "preserve-me"
     assert "provider/selected" in args

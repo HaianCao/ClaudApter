@@ -12,7 +12,15 @@ from claudapter.web import public_config
 
 
 def test_registry_settings_persist_and_require_gateway(tmp_path):
-    provider = Provider("demo", "Demo", "https://example.test/v1", protocol="chat", execution_mode="gateway", capabilities_file="checks.json", require_verified_capabilities=True)
+    provider = Provider(
+        "demo",
+        "Demo",
+        "https://example.test/v1",
+        protocol="chat",
+        execution_mode="gateway",
+        capabilities_file="checks.json",
+        require_verified_capabilities=True,
+    )
     config = Config({"demo": provider}, path=tmp_path / "config.toml")
     save(config)
     restored = load(config.path)
@@ -34,7 +42,9 @@ def test_messages_registry_uses_actual_v1_prefix_and_config_relative_path(tmp_pa
     class Protocol(StrEnum):
         MESSAGES = "messages"
 
-    provider = Provider("demo", "Demo", "https://example.test/api", execution_mode="gateway", capabilities_file="checks.json", require_verified_capabilities=True)
+    provider = Provider(
+        "demo", "Demo", "https://example.test/api", execution_mode="gateway", capabilities_file="checks.json", require_verified_capabilities=True
+    )
     config = Config({"demo": provider}, path=tmp_path / "config.toml")
     core = types.ModuleType("protoverta.core")
     core.Protocol = Protocol
@@ -42,7 +52,10 @@ def test_messages_registry_uses_actual_v1_prefix_and_config_relative_path(tmp_pa
     server.GatewayConfig, server.gateway_session = Mock(), Mock()
     capabilities = types.ModuleType("protoverta.capabilities")
     capabilities.CapabilityRegistry = Mock()
-    with patch.dict(sys.modules, {"protoverta.core": core, "protoverta.server": server, "protoverta.capabilities": capabilities}), patch("claudapter.launcher.get_token", return_value="fixture-key"):
+    with (
+        patch.dict(sys.modules, {"protoverta.core": core, "protoverta.server": server, "protoverta.capabilities": capabilities}),
+        patch("claudapter.launcher.get_token", return_value="fixture-key"),
+    ):
         _gateway(config, provider)
     capabilities.CapabilityRegistry.load.assert_called_once_with(tmp_path / "checks.json")
     assert server.GatewayConfig.call_args.args[1] == "https://example.test/api/v1"
@@ -55,9 +68,19 @@ def test_failed_preflight_does_not_open_listener_or_launch_cli():
     report.require.side_effect = ValueError("unverified=streaming")
     registry = Mock()
     registry.assess.return_value = report
-    gateway = types.SimpleNamespace(capabilities=registry, upstream_base_url=provider.base_url + "/v1", upstream_protocol="messages", upstream_reasoning="provider_default", require_verified_capabilities=True)
+    gateway = types.SimpleNamespace(
+        capabilities=registry,
+        upstream_base_url=provider.base_url + "/v1",
+        upstream_protocol="messages",
+        upstream_reasoning="provider_default",
+        require_verified_capabilities=True,
+    )
     listener = Mock()
-    with patch("claudapter.launcher._gateway", return_value=(gateway, listener)), patch("claudapter.launcher.build_invocation") as build, pytest.raises(ClaudapterError, match="unverified=streaming"):
+    with (
+        patch("claudapter.launcher._gateway", return_value=(gateway, listener)),
+        patch("claudapter.launcher.build_invocation") as build,
+        pytest.raises(ClaudapterError, match="unverified=streaming"),
+    ):
         preflight(Config(), provider, "model-a", "default")
     listener.assert_not_called()
     build.assert_not_called()

@@ -26,7 +26,11 @@ def handler(tmp_path):
         captured["type"] = handler
         return Server()
 
-    with patch.object(web, "ThreadingHTTPServer", side_effect=server), patch.object(web.webbrowser, "open"), patch.object(web.secrets, "token_urlsafe", return_value="fixture-token"):
+    with (
+        patch.object(web, "ThreadingHTTPServer", side_effect=server),
+        patch.object(web.webbrowser, "open"),
+        patch.object(web.secrets, "token_urlsafe", return_value="fixture-token"),
+    ):
         web.serve(Config(path=tmp_path / "settings.toml"))
 
     def create(path="/?token=fixture-token", host="127.0.0.1:12345", origin=None, method="GET"):

@@ -21,7 +21,9 @@ def test_setup_status_uses_exact_route_and_keeps_missing_evidence_unknown(tmp_pa
     gateway = GatewayConfig("chat", provider.base_url, "key", "local", client_profile="claude", messages_usage_policy="deferred")
     good = CapabilityRecord(provider.base_url, "chat", "ok", {"text": True, "streaming": True}, "2026-11-04", "fixture", context_window_tokens=32768)
     bad = CapabilityRecord(provider.base_url, "chat", "bad", {"streaming": False}, "2026-11-04", "fixture")
-    route = RouteCapabilityRecord(provider.base_url, "chat", "ok", "messages", True, "claude", route_policies(gateway), good.features, "2026-11-04", "fixture", "fixture")
+    route = RouteCapabilityRecord(
+        provider.base_url, "chat", "ok", "messages", True, "claude", route_policies(gateway), good.features, "2026-11-04", "fixture", "fixture"
+    )
     registry = CapabilityRegistry((good, bad), (route,))
     monkeypatch.setattr(CapabilityRegistry, "load", lambda path: registry)
     ok_status = model_status(config, provider, "ok")

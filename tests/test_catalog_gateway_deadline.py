@@ -16,22 +16,38 @@ def fixture(tmp_path, monkeypatch, policy_timeout=None):
     config = Config(providers={provider.id: provider}, path=tmp_path / "config.toml")
     if policy_timeout is not None:
         provider.gateway_runtime["catalog_policy_file"] = "policy.json"
-        (tmp_path / "policy.json").write_text(json.dumps({
-            "schema_version": 1, "base_url": provider.base_url, "checked_at": "2026-10-29",
-            "evidence": "synthetic fixture", "policy": {"timeout": policy_timeout, "pagination": "after_id"},
-        }), encoding="utf-8")
+        (tmp_path / "policy.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "base_url": provider.base_url,
+                    "checked_at": "2026-10-29",
+                    "evidence": "synthetic fixture",
+                    "policy": {"timeout": policy_timeout, "pagination": "after_id"},
+                }
+            ),
+            encoding="utf-8",
+        )
     monkeypatch.setattr(catalog, "get_token", lambda *args, **kwargs: "synthetic")
     return config, provider
 
 
-@pytest.mark.parametrize("caller,policy_timeout,expected", [
-    (None, None, 12), (0.1, None, 0.1), (2, 0.5, 0.5), (0.1, 2, 0.1), (200, None, 30),
-])
+@pytest.mark.parametrize(
+    "caller,policy_timeout,expected",
+    [
+        (None, None, 12),
+        (0.1, None, 0.1),
+        (2, 0.5, 0.5),
+        (0.1, 2, 0.1),
+        (200, None, 30),
+    ],
+)
 def test_gateway_uses_shorter_caller_and_policy_timeout(tmp_path, monkeypatch, caller, policy_timeout, expected):
     config, provider = fixture(tmp_path, monkeypatch, policy_timeout)
     from protoverta import discovery
 
     observed = []
+
     def fetch(base, headers, policy, **options):
         observed.append(policy.timeout)
         return (discovery.ModelInfo("m", "Model"),)
@@ -50,6 +66,7 @@ def test_gateway_rejects_invalid_caller_timeout_before_request(tmp_path, monkeyp
 
     def unexpected(*args, **kwargs):
         pytest.fail("invalid timeout reached upstream")
+
     monkeypatch.setattr(discovery, "fetch_catalog", unexpected)
     with pytest.raises(ClaudapterError):
         catalog.fetch_models(config, provider, timeout=timeout, cache_sink=unexpected)
@@ -59,11 +76,14 @@ def test_gateway_rejects_invalid_caller_timeout_before_request(tmp_path, monkeyp
 def test_gateway_keeps_external_budget_and_shares_owned_deadline_across_pages(tmp_path, monkeypatch, parent_timeout):
     config, provider = fixture(tmp_path, monkeypatch)
     requests, entries = [], []
-    bodies = iter([
-        {"data": [{"id": "a"}], "has_more": True, "last_id": "a"},
-        {"data": [{"id": "b"}]},
-    ])
+    bodies = iter(
+        [
+            {"data": [{"id": "a"}], "has_more": True, "last_id": "a"},
+            {"data": [{"id": "b"}]},
+        ]
+    )
     with Deadline(parent_timeout) as parent:
+
         def open_request(request, *, timeout):
             requests.append(request)
             assert 0 < timeout <= 0.5

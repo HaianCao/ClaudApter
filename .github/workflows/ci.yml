@@ -44,6 +44,8 @@ jobs:
           if ($LASTEXITCODE) { throw 'Tests failed' }
           python -m ruff check src tests scripts
           if ($LASTEXITCODE) { throw 'Lint failed' }
+          python -m ruff format --check src tests scripts
+          if ($LASTEXITCODE) { throw 'Formatting check failed' }
           python -m build --wheel
           if ($LASTEXITCODE) { throw 'Build failed' }
           python -c "import glob, zipfile; wheel=glob.glob('dist/*.whl')[0]; names=set(zipfile.ZipFile(wheel).namelist()); expected={'claudapter/web_template.html','claudapter/assets/ClaudApter_black.png','claudapter/assets/ClaudApter_white.png','claudapter/assets/ClaudApter_black_icon.png','claudapter/assets/ClaudApter_white_icon.png'}; missing=expected-names; assert not missing, f'Missing package files: {missing}'"

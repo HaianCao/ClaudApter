@@ -40,7 +40,12 @@ def test_refresh_is_unlocked_and_late_cache_is_identity_checked(tmp_path, monkey
         return 0
 
     # Keep launch mocked until listener teardown has joined the setup worker.
-    with patch.object(web, "fetch_models", side_effect=fetch), patch.object(web, "preflight"), patch.object(web, "launch", side_effect=fake_launch) as launch, listener(tmp_path, monkeypatch) as (_, url, session, _):
+    with (
+        patch.object(web, "fetch_models", side_effect=fetch),
+        patch.object(web, "preflight"),
+        patch.object(web, "launch", side_effect=fake_launch) as launch,
+        listener(tmp_path, monkeypatch) as (_, url, session, _),
+    ):
         origin = f"http://{url.netloc}"
         headers = {"Content-Type": "application/json", "X-Codex-Apter-Token" if codex else "X-Claudapter-Token": session}
 
@@ -62,7 +67,16 @@ def test_refresh_is_unlocked_and_late_cache_is_identity_checked(tmp_path, monkey
         try:
             assert started.wait(2)
             if change in {"provider", "key", "mode"}:
-                edit = {**body, **({"base_url": "https://new.test/v1"} if change == "provider" else {"api_key": "synthetic-replacement"} if change == "key" else {"execution_mode": "gateway"})}
+                edit = {
+                    **body,
+                    **(
+                        {"base_url": "https://new.test/v1"}
+                        if change == "provider"
+                        else {"api_key": "synthetic-replacement"}
+                        if change == "key"
+                        else {"execution_mode": "gateway"}
+                    ),
+                }
                 assert call("/api/provider", edit)[0] == 200
             elif change == "delete":
                 assert call("/api/provider?provider=fixture", method="DELETE")[0] == 200

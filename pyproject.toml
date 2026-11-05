@@ -28,6 +28,10 @@ packages = ["src/claudapter"]
 "assets/ClaudApter_black_icon.png" = "claudapter/assets/ClaudApter_black_icon.png"
 "assets/ClaudApter_white_icon.png" = "claudapter/assets/ClaudApter_white_icon.png"
 
+[tool.ruff]
+# Formatter width; long literals that cannot wrap are left as written.
+line-length = 160
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]

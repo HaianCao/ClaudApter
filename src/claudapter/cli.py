@@ -41,6 +41,7 @@ def main(argv: list[str] | None = None) -> int:
         config = load()
         if args.command == "setup":
             from .web import serve
+
             return serve(config)
         if args.command == "validate":
             print("Configuration is valid.")

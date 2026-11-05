@@ -32,9 +32,21 @@ def _bypass_loopback_proxy(env: dict[str, str]) -> None:
     env.update(NO_PROXY=merged, no_proxy=merged)
 
 
-def build_invocation(config: Config, provider: Provider, model: str, effort: str, extra: list[str], mode: str = "run", *, gateway_url: str | None = None, gateway_token: str | None = None) -> tuple[list[str], dict[str, str]]:
+def build_invocation(
+    config: Config,
+    provider: Provider,
+    model: str,
+    effort: str,
+    extra: list[str],
+    mode: str = "run",
+    *,
+    gateway_url: str | None = None,
+    gateway_token: str | None = None,
+) -> tuple[list[str], dict[str, str]]:
     validate_capability_settings(provider.capabilities_file, provider.require_verified_capabilities, provider.execution_mode)
-    if provider.upstream_reasoning not in ("auto", "provider_default", "disabled", "openrouter_disabled") or (provider.execution_mode != "gateway" and provider.upstream_reasoning not in ("auto", "provider_default")):
+    if provider.upstream_reasoning not in ("auto", "provider_default", "disabled", "openrouter_disabled") or (
+        provider.execution_mode != "gateway" and provider.upstream_reasoning not in ("auto", "provider_default")
+    ):
         raise ClaudapterError("An explicit upstream reasoning policy requires gateway mode.")
     if provider.execution_mode not in {"direct", "gateway"}:
         raise ClaudapterError("Unsupported execution mode.")
@@ -61,7 +73,21 @@ def build_invocation(config: Config, provider: Provider, model: str, effort: str
     if effort not in EFFORTS:
         raise ClaudapterError("Invalid effort level.")
     env = os.environ.copy()
-    for name in ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_CUSTOM_HEADERS", "ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_MODEL", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_SETUP_TOKEN", "CLAUDE_CODE_EFFORT_LEVEL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY", "CLAUDE_CODE_USE_AWS"):
+    for name in (
+        "ANTHROPIC_BASE_URL",
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_CUSTOM_HEADERS",
+        "ANTHROPIC_MODEL",
+        "ANTHROPIC_DEFAULT_MODEL",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "CLAUDE_CODE_SETUP_TOKEN",
+        "CLAUDE_CODE_EFFORT_LEVEL",
+        "CLAUDE_CODE_USE_BEDROCK",
+        "CLAUDE_CODE_USE_VERTEX",
+        "CLAUDE_CODE_USE_FOUNDRY",
+        "CLAUDE_CODE_USE_AWS",
+    ):
         env.pop(name, None)
     if provider.execution_mode == "gateway":
         if not gateway_url or not gateway_token:
@@ -85,8 +111,12 @@ def build_invocation(config: Config, provider: Provider, model: str, effort: str
 
             identifiers = tuple(dict.fromkeys((model,) + tuple(value for key, value in provider.agent_models.items() if key != "policy")))
             names = cached_model_names(config, provider, identifiers, token=token)
-            settings["modelPicker"] = {"replaceBuiltInOptions": True, "options": [
-                {"model": mid, "label": names.get(mid, mid), "description": "Session model; capabilities are checked separately."} for mid in identifiers]}
+            settings["modelPicker"] = {
+                "replaceBuiltInOptions": True,
+                "options": [
+                    {"model": mid, "label": names.get(mid, mid), "description": "Session model; capabilities are checked separately."} for mid in identifiers
+                ],
+            }
     if cross_protocol:
         # Scope compatibility settings to this child process, never user files.
         env.update(cross_protocol_environment(prefix))
@@ -123,7 +153,7 @@ def _gateway(config: Config, provider: Provider, model: str | None = None):
         raise ClaudapterError("Gateway mode needs a compatible Protoverta build installed in this Python environment.") from exc
     try:
         upstream = Protocol(provider.protocol)
-        base_url = (claude_base_url(provider.base_url) + "/v1" if upstream == Protocol.MESSAGES else provider.base_url.rstrip("/"))
+        base_url = claude_base_url(provider.base_url) + "/v1" if upstream == Protocol.MESSAGES else provider.base_url.rstrip("/")
         options = {} if upstream == Protocol.MESSAGES else {"client_profile": "claude", "messages_usage_policy": "deferred"}
         if model is not None:
             from protoverta.model_snapshot import ModelSnapshot, SnapshotModel
@@ -150,7 +180,15 @@ def _gateway(config: Config, provider: Provider, model: str | None = None):
             from protoverta.automatic_reasoning import automatic_reasoning
 
             reasoning_policy, _ = automatic_reasoning("messages", upstream, base_url)
-        gateway = GatewayConfig(upstream, base_url, validate_token(get_token(config, provider.id)), secrets.token_urlsafe(32), "x-api-key" if provider.auth_mode == "api_key" else "bearer", upstream_reasoning=reasoning_policy, **options)
+        gateway = GatewayConfig(
+            upstream,
+            base_url,
+            validate_token(get_token(config, provider.id)),
+            secrets.token_urlsafe(32),
+            "x-api-key" if provider.auth_mode == "api_key" else "bearer",
+            upstream_reasoning=reasoning_policy,
+            **options,
+        )
     except (ImportError, OSError, TypeError, ValueError) as exc:
         raise ClaudapterError(f"Invalid or incompatible Protoverta gateway configuration: {exc}") from exc
     return gateway, gateway_session
@@ -169,9 +207,17 @@ def _verify_capabilities(gateway, model: str, effort: str) -> None:
         from protoverta.capabilities import route_policies
         from protoverta.evidence_identity import evidence_options
 
-        registry.assess_route(gateway.upstream_base_url, gateway.upstream_protocol, model, features,
-                              source_protocol="messages", streaming=True, client_profile=gateway.client_profile,
-                              policies=route_policies(gateway), **evidence_options(gateway)).require(verified=gateway.require_verified_routes or gateway.require_current_evidence or gateway.evidence_max_age_days is not None)
+        registry.assess_route(
+            gateway.upstream_base_url,
+            gateway.upstream_protocol,
+            model,
+            features,
+            source_protocol="messages",
+            streaming=True,
+            client_profile=gateway.client_profile,
+            policies=route_policies(gateway),
+            **evidence_options(gateway),
+        ).require(verified=gateway.require_verified_routes or gateway.require_current_evidence or gateway.evidence_max_age_days is not None)
     except ValueError as exc:
         raise ClaudapterError(f"Model compatibility check failed: {exc}") from exc
 

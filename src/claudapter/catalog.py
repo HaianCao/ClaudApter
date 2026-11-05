@@ -97,10 +97,14 @@ def _identity(config, provider, *, token=_UNSET):
 
     if token is _UNSET:
         token = get_token(config, provider.id)
-    return {"base_url": provider.base_url, "protocol": provider.protocol, "auth_mode": provider.auth_mode,
-            "credential_fingerprint": hashlib.sha256((token or "").encode()).hexdigest(),
-            "catalog_policy_file": provider.gateway_runtime.get("catalog_policy_file", ""),
-            "catalog_policy_fingerprint": catalog_policy_fingerprint(config.path, provider)}
+    return {
+        "base_url": provider.base_url,
+        "protocol": provider.protocol,
+        "auth_mode": provider.auth_mode,
+        "credential_fingerprint": hashlib.sha256((token or "").encode()).hexdigest(),
+        "catalog_policy_file": provider.gateway_runtime.get("catalog_policy_file", ""),
+        "catalog_policy_fingerprint": catalog_policy_fingerprint(config.path, provider),
+    }
 
 
 class _CatalogDeadline(Deadline):
@@ -141,7 +145,10 @@ def _gateway_models(config, provider, headers=None, budget=None, *, timeout=12):
                 request.adapter_deadline = active_budget
                 return _OPENER.open(request, timeout=min(timeout, active_budget.remaining()))
 
-            return [item.as_dict() for item in fetch_catalog(provider.base_url, _headers(config, provider) if headers is None else headers, policy, upstream_open=upstream_open)]
+            return [
+                item.as_dict()
+                for item in fetch_catalog(provider.base_url, _headers(config, provider) if headers is None else headers, policy, upstream_open=upstream_open)
+            ]
     except ImportError:
         raise ClaudapterError("Gateway discovery requires the matching Protoverta preview.") from None
     except (ValueError, OSError, TypeError):
@@ -153,7 +160,7 @@ def _direct_models(config, provider, headers, timeout, budget=None):
     models: dict[str, dict[str, str]] = {}
     cursor = ""
     try:
-        with (nullcontext(budget) if budget is not None else Deadline(timeout)) as active_budget:
+        with nullcontext(budget) if budget is not None else Deadline(timeout) as active_budget:
             for _ in range(100):
                 active_budget.remaining()
                 query = {"limit": "1000"} if provider.protocol == "messages" else {}
@@ -214,8 +221,11 @@ def fetch_models(config: Config, provider: Provider, *, timeout=12, cache_sink=N
     headers = _headers(config, provider, token=token)
     identity = _identity(config, provider, token=token)
     gateway_info = _gateway_models(config, provider, headers, budget, timeout=timeout) if provider.execution_mode == "gateway" else None
-    models = ({item["id"]: {"id": item["id"], "display_name": item["display_name"]} for item in gateway_info}
-              if gateway_info is not None else _direct_models(config, provider, headers, timeout, budget))
+    models = (
+        {item["id"]: {"id": item["id"], "display_name": item["display_name"]} for item in gateway_info}
+        if gateway_info is not None
+        else _direct_models(config, provider, headers, timeout, budget)
+    )
     result = list(models.values())
     entry = {"identity": identity, "saved_at": time.time(), "models": result, "model_info": gateway_info}
     if cache_sink is not None:
@@ -242,10 +252,16 @@ def cached_model_names(config, provider, identifiers, *, token=_UNSET):
         if not isinstance(info, list) or len(info) > 10000:
             return {}
         wanted = set(identifiers)
-        return {item["id"]: item["display_name"] for item in info if isinstance(item, dict)
-                and isinstance(item.get("id"), str) and item["id"] in wanted
-                and isinstance(item.get("display_name"), str) and 1 <= len(item["display_name"]) <= 512
-                and not any(ord(c) < 32 or ord(c) == 127 or 0xD800 <= ord(c) <= 0xDFFF for c in item["display_name"])}
+        return {
+            item["id"]: item["display_name"]
+            for item in info
+            if isinstance(item, dict)
+            and isinstance(item.get("id"), str)
+            and item["id"] in wanted
+            and isinstance(item.get("display_name"), str)
+            and 1 <= len(item["display_name"]) <= 512
+            and not any(ord(c) < 32 or ord(c) == 127 or 0xD800 <= ord(c) <= 0xDFFF for c in item["display_name"])
+        }
     except (OSError, ValueError, TypeError, AttributeError, RecursionError):
         return {}
 
@@ -256,7 +272,10 @@ def cached_models(config: Config, provider: Provider) -> tuple[list[dict[str, st
         entry = data.get(provider.id, {})
         if entry.get("identity") != _identity(config, provider) or not isinstance(entry.get("models"), list):
             return [], True
-        if any(not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"] or not isinstance(item.get("display_name"), str) for item in entry["models"]):
+        if any(
+            not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"] or not isinstance(item.get("display_name"), str)
+            for item in entry["models"]
+        ):
             return [], True
         saved_at, now = entry.get("saved_at"), time.time()
         # The bounded comparison also rejects NaN/infinity and arbitrarily

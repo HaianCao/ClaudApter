@@ -44,9 +44,9 @@ def _probe(prefix: tuple[str, ...], identity: tuple) -> tuple[int, int, int] | N
                 env[key] = str(target)
             env.update(DISABLE_AUTOUPDATER="1", CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1")
             with (root / "version").open("w+b") as output:
-                result = subprocess.run([*prefix, "--version"], env=env, cwd=root,
-                                        stdin=subprocess.DEVNULL, stdout=output,
-                                        stderr=subprocess.DEVNULL, timeout=3, check=False)
+                result = subprocess.run(
+                    [*prefix, "--version"], env=env, cwd=root, stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.DEVNULL, timeout=3, check=False
+                )
                 output.seek(0)
                 return parse_version(output.read(257)) if result.returncode == 0 else None
     except (OSError, subprocess.SubprocessError):
@@ -55,6 +55,14 @@ def _probe(prefix: tuple[str, ...], identity: tuple) -> tuple[int, int, int] | N
 
 def cross_protocol_environment(prefix: list[str]) -> dict[str, str]:
     if detect_version(prefix) != (2, 1, 308):
-        warnings.warn("Claude Code version is not verified for translated routes; retaining conservative compatibility settings. Subagents remain unverified.", RuntimeWarning, stacklevel=2)
-    return {"CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1", "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS": "1",
-            "DISABLE_PROMPT_CACHING": "1", "ENABLE_TOOL_SEARCH": "false"}
+        warnings.warn(
+            "Claude Code version is not verified for translated routes; retaining conservative compatibility settings. Subagents remain unverified.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    return {
+        "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
+        "CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS": "1",
+        "DISABLE_PROMPT_CACHING": "1",
+        "ENABLE_TOOL_SEARCH": "false",
+    }

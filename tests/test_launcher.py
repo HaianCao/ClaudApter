@@ -18,7 +18,12 @@ class LauncherTests(unittest.TestCase):
             p = Provider("demo", "Demo", "https://gateway.test")
             config = Config({"demo": p}, path=Path(directory) / "config.toml")
             store_token(config, "demo", "secret")
-            with patch("claudapter.launcher.shutil.which", return_value="claude.exe"), patch.dict("os.environ", {"ANTHROPIC_API_KEY": "wrong", "ANTHROPIC_CUSTOM_HEADERS": "Authorization: Bearer wrong", "CLAUDE_CODE_USE_BEDROCK": "1"}):
+            with (
+                patch("claudapter.launcher.shutil.which", return_value="claude.exe"),
+                patch.dict(
+                    "os.environ", {"ANTHROPIC_API_KEY": "wrong", "ANTHROPIC_CUSTOM_HEADERS": "Authorization: Bearer wrong", "CLAUDE_CODE_USE_BEDROCK": "1"}
+                ),
+            ):
                 args, env = build_invocation(config, p, "claude-demo", "high", ["session-id"], "resume")
             self.assertEqual(args, ["claude.exe", "--model", "claude-demo", "--effort", "high", "--resume", "session-id"])
             self.assertEqual(env["ANTHROPIC_BASE_URL"], "https://gateway.test")
@@ -45,8 +50,13 @@ class LauncherTests(unittest.TestCase):
             store_token(config, "demo", "upstream-secret")
             with patch("claudapter.launcher.shutil.which", return_value="claude.exe"):
                 args, env = build_invocation(
-                    config, p, "claude-demo", "default", [],
-                    gateway_url="http://127.0.0.1:8765", gateway_token="local-secret",
+                    config,
+                    p,
+                    "claude-demo",
+                    "default",
+                    [],
+                    gateway_url="http://127.0.0.1:8765",
+                    gateway_token="local-secret",
                 )
             self.assertEqual(args, ["claude.exe", "--model", "claude-demo"])
             self.assertEqual(env["ANTHROPIC_BASE_URL"], "http://127.0.0.1:8765")
@@ -88,9 +98,11 @@ class LauncherTests(unittest.TestCase):
             snapshot = types.ModuleType("protoverta.model_snapshot")
             snapshot.ModelSnapshot = lambda base, protocol, entries: (base, protocol, entries)
             snapshot.SnapshotModel = lambda mid, name: (mid, name)
-            with patch.dict(sys.modules, {"protoverta": package, "protoverta.core": core, "protoverta.server": server, "protoverta.model_snapshot": snapshot}), patch(
-                "claudapter.launcher.shutil.which", return_value="claude.exe"
-            ), patch("claudapter.launcher.subprocess.run", return_value=types.SimpleNamespace(returncode=3)) as run:
+            with (
+                patch.dict(sys.modules, {"protoverta": package, "protoverta.core": core, "protoverta.server": server, "protoverta.model_snapshot": snapshot}),
+                patch("claudapter.launcher.shutil.which", return_value="claude.exe"),
+                patch("claudapter.launcher.subprocess.run", return_value=types.SimpleNamespace(returncode=3)) as run,
+            ):
                 self.assertEqual(launch(config, p, "claude-demo", "default", []), 3)
             self.assertEqual(events[0], ("messages", "https://gateway.test/v1", "upstream-secret", "bearer"))
             self.assertEqual(events[1:], ["open", "closed"])

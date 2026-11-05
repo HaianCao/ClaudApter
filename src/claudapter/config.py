@@ -100,7 +100,16 @@ def validate_base_url(value: str, protocol: str = "messages") -> str:
     except ValueError as exc:
         raise ClaudapterError("Base URL has an invalid host or port.") from exc
     local_http = parsed.scheme == "http" and hostname in {"127.0.0.1", "localhost", "::1"}
-    if re.search(r"\s", value) or (parsed.scheme != "https" and not local_http) or not hostname or parsed.username is not None or parsed.password is not None or parsed.query or parsed.fragment or (port is not None and port < 1):
+    if (
+        re.search(r"\s", value)
+        or (parsed.scheme != "https" and not local_http)
+        or not hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+        or (port is not None and port < 1)
+    ):
         raise ClaudapterError("Base URL must use HTTPS (or loopback HTTP) without credentials, query or fragment.")
     if parsed.path.endswith(("/messages", "/responses", "/chat/completions")):
         raise ClaudapterError("Enter the base URL, for example https://provider.example/v1, without the endpoint suffix.")
@@ -133,6 +142,7 @@ def validate(config: Config) -> None:
         for field_name in ("id", "display_name", "base_url", "auth_mode", "default_model", "execution_mode", "protocol", "upstream_reasoning"):
             _text(getattr(provider, field_name), "provider." + field_name, required=field_name != "default_model")
         from .gateway_options import validate_gateway_limits
+
         validate_gateway_limits(provider.gateway_limits, provider.execution_mode)
         from .agent_models import validate_agent_models
 
@@ -150,7 +160,9 @@ def validate(config: Config) -> None:
             raise ClaudapterError(f"Invalid auth mode for {provider_id}.")
         if provider.execution_mode not in {"direct", "gateway"}:
             raise ClaudapterError(f"Invalid execution mode for {provider_id}.")
-        if provider.upstream_reasoning not in ("auto", "provider_default", "disabled", "openrouter_disabled") or (provider.execution_mode != "gateway" and provider.upstream_reasoning not in ("auto", "provider_default")):
+        if provider.upstream_reasoning not in ("auto", "provider_default", "disabled", "openrouter_disabled") or (
+            provider.execution_mode != "gateway" and provider.upstream_reasoning not in ("auto", "provider_default")
+        ):
             raise ClaudapterError("An explicit upstream reasoning policy requires gateway mode.")
         if provider.protocol != "messages" and provider.execution_mode != "gateway":
             raise ClaudapterError("Chat and Responses providers require local Protoverta gateway mode.")
@@ -195,7 +207,14 @@ def load(path: Path | None = None) -> Config:
 def save(config: Config) -> None:
     validate(config)
     path = config.path or config_path()
-    lines = ["schema_version = 1", "", "[defaults]", f"provider = {toml_value(config.default_provider, ensure_ascii=True)}", f"model = {toml_value(config.default_model, ensure_ascii=True)}", f"effort = {toml_value(config.default_effort, ensure_ascii=True)}"]
+    lines = [
+        "schema_version = 1",
+        "",
+        "[defaults]",
+        f"provider = {toml_value(config.default_provider, ensure_ascii=True)}",
+        f"model = {toml_value(config.default_model, ensure_ascii=True)}",
+        f"effort = {toml_value(config.default_effort, ensure_ascii=True)}",
+    ]
     for provider in config.providers.values():
         lines += ["", "[[providers]]"]
         for name in ("id", "display_name", "base_url", "auth_mode", "default_model", "execution_mode", "protocol", "upstream_reasoning"):
@@ -205,6 +224,7 @@ def save(config: Config) -> None:
             lines.extend([f"capabilities_file = {toml_value(registry_path)}", f"require_verified_capabilities = {str(required).lower()}"])
         if provider.gateway_limits:
             from .gateway_options import limits_toml
+
             lines.append("gateway_limits = " + limits_toml(provider.gateway_limits))
         if provider.gateway_runtime:
             from .gateway_options import runtime_toml

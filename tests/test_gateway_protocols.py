@@ -43,7 +43,11 @@ def test_cross_protocol_launcher_settings_are_child_only(tmp_path):
 def test_loopback_proxy_bypass_does_not_change_parent_or_direct_mode(tmp_path):
     provider = Provider("demo", "Demo", "https://example.test", execution_mode="gateway", protocol="messages")
     config = Config({"demo": provider}, path=tmp_path / "config.toml")
-    with patch("claudapter.launcher.shutil.which", return_value="claude.exe"), patch("claudapter.launcher.get_token", return_value="secret"), patch.dict(os.environ, {"NO_PROXY": "internal.test, other.test, localhost", "HTTPS_PROXY": "http://proxy.test:8080"}, clear=True):
+    with (
+        patch("claudapter.launcher.shutil.which", return_value="claude.exe"),
+        patch("claudapter.launcher.get_token", return_value="secret"),
+        patch.dict(os.environ, {"NO_PROXY": "internal.test, other.test, localhost", "HTTPS_PROXY": "http://proxy.test:8080"}, clear=True),
+    ):
         before = dict(os.environ)
         _args, env = build_invocation(config, provider, "m", "default", [], gateway_url="http://127.0.0.1:8765", gateway_token="local")
         assert dict(os.environ) == before
@@ -81,7 +85,11 @@ def test_gateway_passes_explicit_prefix_and_compatibility_policy(tmp_path, proto
     if protocol == "messages" and not expected.endswith("/v1"):
         expected += "/v1"
     assert captured["args"][1] == expected
-    assert captured["options"] == ({"upstream_reasoning": "provider_default"} if protocol == "messages" else {"client_profile": "claude", "messages_usage_policy": "deferred", "upstream_reasoning": "provider_default"})
+    assert captured["options"] == (
+        {"upstream_reasoning": "provider_default"}
+        if protocol == "messages"
+        else {"client_profile": "claude", "messages_usage_policy": "deferred", "upstream_reasoning": "provider_default"}
+    )
 
 
 @pytest.mark.parametrize("protocol", ["chat", "responses"])
@@ -91,7 +99,10 @@ def test_discovery_does_not_send_anthropic_query_or_headers(tmp_path, protocol):
     config = Config({"demo": provider}, path=tmp_path / "config.toml")
     from protoverta.discovery import ModelInfo
 
-    with patch("claudapter.catalog.get_token", return_value="fake"), patch("protoverta.discovery.fetch_catalog", return_value=(ModelInfo("m", "Readable model"),)) as request:
+    with (
+        patch("claudapter.catalog.get_token", return_value="fake"),
+        patch("protoverta.discovery.fetch_catalog", return_value=(ModelInfo("m", "Readable model"),)) as request,
+    ):
         assert fetch_models(config, provider) == [{"id": "m", "display_name": "Readable model"}]
     assert request.call_args.args[0] == "https://example.test/api/v4"
     assert request.call_args.args[2].path == "/models"

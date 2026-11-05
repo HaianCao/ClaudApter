@@ -76,8 +76,7 @@ def test_numeric_provider_save_and_reload_keeps_setup_and_other_key_readable(tmp
         origin = f"http://{url.netloc}"
         headers = {"X-Claudapter-Token": token, "Content-Type": "application/json"}
         for provider_id in ("123", "other"):
-            body = {"id": provider_id, "display_name": "Fixture " + provider_id,
-                    "base_url": "https://example.test/v1", "api_key": "synthetic-" + provider_id}
+            body = {"id": provider_id, "display_name": "Fixture " + provider_id, "base_url": "https://example.test/v1", "api_key": "synthetic-" + provider_id}
             with urlopen(Request(origin + "/api/provider", data=json.dumps(body).encode(), headers=headers), timeout=3) as response:
                 assert response.status == 200
         with urlopen(Request(origin + "/api/config", headers=headers), timeout=3) as response:

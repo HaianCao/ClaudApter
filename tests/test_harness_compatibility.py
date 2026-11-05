@@ -11,6 +11,7 @@ from claudapter import harness
 def test_native_route_does_not_probe_harness_version(monkeypatch):
     from claudapter import launcher
     from claudapter.config import Config, Provider
+
     provider = Provider("fixture", "Fixture", "https://example.invalid")
     monkeypatch.setattr(launcher.shutil, "which", lambda _: "fixture.exe")
     monkeypatch.setattr(launcher, "get_token", lambda *_: "synthetic")
@@ -28,8 +29,7 @@ def reset_probe_cache():
 
 def test_parse_exact_release_and_reject_ambiguous_output():
     assert harness.parse_version(b"2.1.308 (Claude Code)\r\n") == (2, 1, 308)
-    for raw in (b"", b"1.2", b"not-a-cli 1.2.3", b"2.1.308 (Claude Code)-dev", b"x" * 257,
-                b"2.1.308 (Claude Code)\n2.1.308 (Claude Code)", b"\xff"):
+    for raw in (b"", b"1.2", b"not-a-cli 1.2.3", b"2.1.308 (Claude Code)-dev", b"x" * 257, b"2.1.308 (Claude Code)\n2.1.308 (Claude Code)", b"\xff"):
         assert harness.parse_version(raw) is None
 
 
@@ -57,11 +57,14 @@ def test_probe_uses_isolated_profile_without_credentials(tmp_path, monkeypatch):
 @pytest.mark.parametrize("mode", ["nonzero", "oversized", "malformed"])
 def test_invalid_version_is_unknown(tmp_path, mode):
     script = tmp_path / "fixture.py"
-    script.write_text({
-        "nonzero": "print('2.1.308 (Claude Code)'); raise SystemExit(1)",
-        "oversized": "print('x' * 4096)",
-        "malformed": "print('private diagnostic text')",
-    }[mode], encoding="utf-8")
+    script.write_text(
+        {
+            "nonzero": "print('2.1.308 (Claude Code)'); raise SystemExit(1)",
+            "oversized": "print('x' * 4096)",
+            "malformed": "print('private diagnostic text')",
+        }[mode],
+        encoding="utf-8",
+    )
     assert harness.detect_version([sys.executable, str(script)]) is None
 
 
@@ -70,6 +73,7 @@ def test_failed_or_timed_out_probe_returns_unknown(monkeypatch, error):
     def fail(*args, **kwargs):
         assert kwargs["timeout"] == 3
         raise error
+
     monkeypatch.setattr(harness.subprocess, "run", fail)
     assert harness.detect_version(["nonexistent-fixture"]) is None
 

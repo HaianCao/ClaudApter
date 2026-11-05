@@ -37,7 +37,22 @@ _HTML = Path(__file__).with_name("web_template.html").read_text(encoding="utf-8"
 
 def public_config(config: Config) -> dict:
     result = {
-        "providers": [{"id": p.id, "display_name": p.display_name, "base_url": p.base_url, "auth_mode": p.auth_mode, "default_model": p.default_model, "execution_mode": p.execution_mode, "protocol": p.protocol, "upstream_reasoning": p.upstream_reasoning, "capabilities_file": p.capabilities_file, "require_verified_capabilities": p.require_verified_capabilities, "has_key": bool(get_token(config, p.id))} for p in config.providers.values()],
+        "providers": [
+            {
+                "id": p.id,
+                "display_name": p.display_name,
+                "base_url": p.base_url,
+                "auth_mode": p.auth_mode,
+                "default_model": p.default_model,
+                "execution_mode": p.execution_mode,
+                "protocol": p.protocol,
+                "upstream_reasoning": p.upstream_reasoning,
+                "capabilities_file": p.capabilities_file,
+                "require_verified_capabilities": p.require_verified_capabilities,
+                "has_key": bool(get_token(config, p.id)),
+            }
+            for p in config.providers.values()
+        ],
         "defaults": {"provider": config.default_provider, "model": config.default_model, "effort": config.default_effort},
     }
     for provider in result["providers"]:
@@ -135,7 +150,10 @@ def serve(config: Config) -> int:
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("Referrer-Policy", "no-referrer")
-                self.send_header("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'")
+                self.send_header(
+                    "Content-Security-Policy",
+                    "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'",
+                )
                 self.send_header("X-Content-Type-Options", "nosniff")
                 self.send_header("Content-Length", str(len(page)))
                 self.end_headers()
@@ -214,7 +232,9 @@ def serve(config: Config) -> int:
             except ClaudapterError as exc:
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             except (OSError, ValueError):
-                self._json({"error": "Could not save settings. Reopen setup if settings changed elsewhere; check local storage permissions."}, HTTPStatus.BAD_REQUEST)
+                self._json(
+                    {"error": "Could not save settings. Reopen setup if settings changed elsewhere; check local storage permissions."}, HTTPStatus.BAD_REQUEST
+                )
 
         def _refresh(self, body):
             with state_lock, guard.edit():
@@ -232,7 +252,12 @@ def serve(config: Config) -> int:
                     models = fetch_models(snapshot, provider, cache_sink=entries.append, budget=budget, token=credential)
                 with state_lock, guard.edit():
                     current = config.providers.get(provider.id)
-                    if requested_run is not None or current != provider or _identity(config, current) != identity or (entries and entries[0]["identity"] != identity):
+                    if (
+                        requested_run is not None
+                        or current != provider
+                        or _identity(config, current) != identity
+                        or (entries and entries[0]["identity"] != identity)
+                    ):
                         raise ClaudapterError("Provider settings changed during refresh. Refresh models again.")
                     if entries:
                         store_catalog(config, provider.id, entries[0])
@@ -262,11 +287,32 @@ def serve(config: Config) -> int:
                     execution_mode = str(body.get("execution_mode", old_provider.execution_mode if old_provider else "direct"))
                     protocol = str(body.get("protocol", old_provider.protocol if old_provider else "messages"))
                     upstream_reasoning = str(body.get("upstream_reasoning", old_provider.upstream_reasoning if old_provider else "auto"))
-                    capabilities_file, require_verified = validate_capability_settings(body.get("capabilities_file", old_provider.capabilities_file if old_provider else ""), body.get("require_verified_capabilities", old_provider.require_verified_capabilities if old_provider else False), execution_mode)
-                    provider = Provider(provider_id, display_name, validate_base_url(str(body.get("base_url", "")), protocol), mode, default_model, execution_mode, protocol, upstream_reasoning, capabilities_file, require_verified)
-                    provider.gateway_limits = validate_gateway_limits(body.get("gateway_limits", old_provider.gateway_limits if old_provider else {}), execution_mode)
-                    provider.gateway_runtime = validate_gateway_runtime(body.get("gateway_runtime", old_provider.gateway_runtime if old_provider else {}), execution_mode)
-                    provider.agent_models = validate_agent_models(body.get("agent_models", old_provider.agent_models if old_provider else {"policy": "selected"}))
+                    capabilities_file, require_verified = validate_capability_settings(
+                        body.get("capabilities_file", old_provider.capabilities_file if old_provider else ""),
+                        body.get("require_verified_capabilities", old_provider.require_verified_capabilities if old_provider else False),
+                        execution_mode,
+                    )
+                    provider = Provider(
+                        provider_id,
+                        display_name,
+                        validate_base_url(str(body.get("base_url", "")), protocol),
+                        mode,
+                        default_model,
+                        execution_mode,
+                        protocol,
+                        upstream_reasoning,
+                        capabilities_file,
+                        require_verified,
+                    )
+                    provider.gateway_limits = validate_gateway_limits(
+                        body.get("gateway_limits", old_provider.gateway_limits if old_provider else {}), execution_mode
+                    )
+                    provider.gateway_runtime = validate_gateway_runtime(
+                        body.get("gateway_runtime", old_provider.gateway_runtime if old_provider else {}), execution_mode
+                    )
+                    provider.agent_models = validate_agent_models(
+                        body.get("agent_models", old_provider.agent_models if old_provider else {"policy": "selected"})
+                    )
                     updated = copy.deepcopy(config)
                     updated.providers[provider_id] = provider
                     persist_provider_change(config, updated, provider_id, str(body["api_key"]) if body.get("api_key") else None)

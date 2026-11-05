@@ -40,10 +40,22 @@ def model_status(config, provider, model):
         if not path.is_absolute():
             path = (config.path or config_path()).resolve().parent / path
         reasoning = automatic_reasoning("messages", provider.protocol, base)[0] if provider.upstream_reasoning == "auto" else provider.upstream_reasoning
-        options = {**provider.gateway_runtime, "upstream_reasoning": reasoning,
-                   "messages_usage_policy": "strict" if provider.protocol == "messages" else "deferred"}
-        return selection_status(CapabilityRegistry.load(path), base, provider.protocol, model, source_protocol="messages",
-                                client_profile="strict" if provider.protocol == "messages" else "claude", overrides=options,
-                                freshness_required=bool(provider.gateway_runtime.get("require_current_evidence") or provider.gateway_runtime.get("evidence_max_age_days") is not None))
+        options = {
+            **provider.gateway_runtime,
+            "upstream_reasoning": reasoning,
+            "messages_usage_policy": "strict" if provider.protocol == "messages" else "deferred",
+        }
+        return selection_status(
+            CapabilityRegistry.load(path),
+            base,
+            provider.protocol,
+            model,
+            source_protocol="messages",
+            client_profile="strict" if provider.protocol == "messages" else "claude",
+            overrides=options,
+            freshness_required=bool(
+                provider.gateway_runtime.get("require_current_evidence") or provider.gateway_runtime.get("evidence_max_age_days") is not None
+            ),
+        )
     except (ImportError, OSError, ValueError, KeyError, TypeError):
         return unknown

@@ -56,7 +56,11 @@ def wheel(directory, version, *, broken=False, slow=False):
     main = "import json, os, sys, time\n"
     if slow:
         main += "open(os.environ['TEST_MARKER'], 'w').write('candidate')\ntime.sleep(60)\n"
-    main += "raise SystemExit(9)\n" if broken else f"print(json.dumps({{'version': '{version}', 'args': sys.argv[1:]}}))\nif '--exit-seven' in sys.argv: raise SystemExit(7)\n"
+    main += (
+        "raise SystemExit(9)\n"
+        if broken
+        else f"print(json.dumps({{'version': '{version}', 'args': sys.argv[1:]}}))\nif '--exit-seven' in sys.argv: raise SystemExit(7)\n"
+    )
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr(f"{MODULE}/__init__.py", "")
         archive.writestr(f"{MODULE}/cli.py", main)
@@ -69,24 +73,42 @@ def wheel(directory, version, *, broken=False, slow=False):
 def environment(tmp_path):
     profile = tmp_path / "profile"
     profile.mkdir(exist_ok=True)
-    return dict(os.environ, TEST_HELPER=str(HELPER), TEST_ROOT=str(tmp_path / "adapter with spaces"),
-                TEST_PYTHON=sys.executable, TEST_MODULE=MODULE, TEST_COMMAND=COMMAND,
-                TEST_MARKER=str(tmp_path / "marker"), TEST_ACTION="install",
-                APPDATA=str(profile / "roaming"), LOCALAPPDATA=str(profile / "local"), USERPROFILE=str(profile),
-                HOME=str(profile), CODEX_HOME=str(profile / "codex"), CLAUDE_CONFIG_DIR=str(profile / "claude"),
-                PIP_NO_INDEX="1", PIP_CONFIG_FILE=os.devnull, PIP_DISABLE_PIP_VERSION_CHECK="1")
+    return dict(
+        os.environ,
+        TEST_HELPER=str(HELPER),
+        TEST_ROOT=str(tmp_path / "adapter with spaces"),
+        TEST_PYTHON=sys.executable,
+        TEST_MODULE=MODULE,
+        TEST_COMMAND=COMMAND,
+        TEST_MARKER=str(tmp_path / "marker"),
+        TEST_ACTION="install",
+        APPDATA=str(profile / "roaming"),
+        LOCALAPPDATA=str(profile / "local"),
+        USERPROFILE=str(profile),
+        HOME=str(profile),
+        CODEX_HOME=str(profile / "codex"),
+        CLAUDE_CONFIG_DIR=str(profile / "claude"),
+        PIP_NO_INDEX="1",
+        PIP_CONFIG_FILE=os.devnull,
+        PIP_DISABLE_PIP_VERSION_CHECK="1",
+    )
 
 
 def install(env, target, *, action="install"):
-    return subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", HARNESS],
-                          env=dict(env, TEST_WHEEL=str(target), TEST_ACTION=action), capture_output=True,
-                          text=True, errors="replace", timeout=90, check=False)
+    return subprocess.run(
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", HARNESS],
+        env=dict(env, TEST_WHEEL=str(target), TEST_ACTION=action),
+        capture_output=True,
+        text=True,
+        errors="replace",
+        timeout=90,
+        check=False,
+    )
 
 
 def launch(env, *args):
     command = str(Path(env["TEST_ROOT"]) / "bin" / f"{COMMAND}.exe")
-    result = subprocess.run([command, *args], env=env,
-                            capture_output=True, text=True, errors="replace", timeout=20, check=False)
+    result = subprocess.run([command, *args], env=env, capture_output=True, text=True, errors="replace", timeout=20, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
     return json.loads(result.stdout)
 
@@ -133,8 +155,7 @@ def wait_marker(env, process):
 def kill_tree(process):
     if process.poll() is None:
         # Only the tree of the process created by this test; never enumerate user processes.
-        subprocess.run(["taskkill.exe", "/PID", str(process.pid), "/T", "/F"],
-                       capture_output=True, timeout=15, check=False)
+        subprocess.run(["taskkill.exe", "/PID", str(process.pid), "/T", "/F"], capture_output=True, timeout=15, check=False)
     process.wait(timeout=15)
 
 
@@ -146,8 +167,12 @@ def test_killed_candidate_or_lock_holder_cannot_damage_active_generation(tmp_pat
     original = pointer.read_bytes()
     target = wheel(tmp_path, "9.0.2", slow=True)
     with (tmp_path / "worker.log").open("w") as log:
-        worker = subprocess.Popen(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", HARNESS],
-                                  env=dict(env, TEST_ACTION=action, TEST_WHEEL=str(target)), stdout=log, stderr=log)
+        worker = subprocess.Popen(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", HARNESS],
+            env=dict(env, TEST_ACTION=action, TEST_WHEEL=str(target)),
+            stdout=log,
+            stderr=log,
+        )
         try:
             wait_marker(env, worker)
             concurrent = install(env, wheel(tmp_path, "9.0.3"))
@@ -172,14 +197,14 @@ def test_legacy_environment_is_detected_and_never_modified(tmp_path):
     assert_ok(install(env, wheel(tmp_path, "9.0.1")))
     assert legacy.read_bytes() == b"legacy-sentinel-not-executed"
     assert launch(env, "--help")["version"] == "9.0.1"
-    result = subprocess.run([str(Path(env["TEST_ROOT"]) / "bin" / f"{COMMAND}.exe"), "--exit-seven"],
-                            env=env, capture_output=True, timeout=15, check=False)
+    result = subprocess.run([str(Path(env["TEST_ROOT"]) / "bin" / f"{COMMAND}.exe"), "--exit-seven"], env=env, capture_output=True, timeout=15, check=False)
     assert result.returncode == 7
     executable = str(Path(env["TEST_ROOT"]) / "bin" / f"{COMMAND}.exe")
-    for arguments in (["cmd.exe", "/d", "/c", executable, "--help"],
-                      ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "& $env:TEST_LAUNCHER --help"]):
-        result = subprocess.run(arguments, env=dict(env, TEST_LAUNCHER=executable),
-                                capture_output=True, text=True, errors="replace", timeout=20, check=False)
+    for arguments in (
+        ["cmd.exe", "/d", "/c", executable, "--help"],
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "& $env:TEST_LAUNCHER --help"],
+    ):
+        result = subprocess.run(arguments, env=dict(env, TEST_LAUNCHER=executable), capture_output=True, text=True, errors="replace", timeout=20, check=False)
         assert result.returncode == 0, result.stdout + result.stderr
         assert json.loads(result.stdout)["version"] == "9.0.1"
 

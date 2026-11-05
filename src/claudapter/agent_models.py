@@ -8,7 +8,12 @@ _ALIASES = {"default", "inherit", "haiku", "sonnet", "opus", "fable", "opusplan"
 
 
 def _model(value):
-    if not isinstance(value, str) or not 1 <= len(value) <= 512 or value.lower().removesuffix("[1m]") in _ALIASES or any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in value):
+    if (
+        not isinstance(value, str)
+        or not 1 <= len(value) <= 512
+        or value.lower().removesuffix("[1m]") in _ALIASES
+        or any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in value)
+    ):
         raise ClaudapterError("Agent model must be an exact model ID (1–512 characters), not a Claude family alias or whitespace.")
     try:
         value.encode("utf-8")

@@ -207,7 +207,6 @@ def test_deadline_interrupts_a_stalled_tls_handshake(tmp_path, monkeypatch):
         worker.join(2)
 
 
-
 @pytest.mark.parametrize("execution_mode", ["direct", "gateway"])
 def test_claude_pagination_shares_one_total_deadline(tmp_path, monkeypatch, execution_mode):
     with upstream("pages") as (base, _, _):
@@ -227,11 +226,18 @@ def test_gateway_shorter_policy_or_parent_stops_trickling_headers(tmp_path, monk
         config, provider = fixture_config(tmp_path, monkeypatch, base)
         provider.execution_mode = "gateway"
         provider.gateway_runtime["catalog_policy_file"] = "catalog-policy.json"
-        (tmp_path / "catalog-policy.json").write_text(json.dumps({
-            "schema_version": 1, "base_url": base, "checked_at": "2026-10-29",
-            "evidence": "synthetic loopback fixture",
-            "policy": {"timeout": 0.25 if shorter == "policy" else 2},
-        }), encoding="utf-8")
+        (tmp_path / "catalog-policy.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "base_url": base,
+                    "checked_at": "2026-10-29",
+                    "evidence": "synthetic loopback fixture",
+                    "policy": {"timeout": 0.25 if shorter == "policy" else 2},
+                }
+            ),
+            encoding="utf-8",
+        )
         parent = Deadline(0.25 if shorter == "parent" else 5)
         try:
             with parent:

@@ -21,7 +21,13 @@ def provider():
 
 
 def test_product_runtime_values_and_diagnostic_paths(tmp_path):
-    values = {"diagnostics_dir": "diagnostics", "token_count_mode": "estimate", "prompt_caching": "ephemeral", "require_current_evidence": True, "evidence_max_age_days": 30}
+    values = {
+        "diagnostics_dir": "diagnostics",
+        "token_count_mode": "estimate",
+        "prompt_caching": "ephemeral",
+        "require_current_evidence": True,
+        "evidence_max_age_days": 30,
+    }
     item = provider()
     item.gateway_runtime = values
     assert validate_gateway_runtime(values, "gateway") == values

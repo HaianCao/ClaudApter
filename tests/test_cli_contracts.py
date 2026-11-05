@@ -21,7 +21,7 @@ def configured(monkeypatch):
 def test_cli_preserves_selection_and_literal_payload(configured, monkeypatch, mode):
     launch = Mock(return_value=7)
     monkeypatch.setattr(cli, "launch", launch)
-    payload = ["a b & echo %TOKEN%", '-c', 'fixture="value"', "Unicode \\u2603"]
+    payload = ["a b & echo %TOKEN%", "-c", 'fixture="value"', "Unicode \\u2603"]
     assert cli.main([mode, "-p", "demo", "-m", "chosen-model", "--", *payload]) == 7
     args = launch.call_args.args
     assert args[:3] == (configured[0], configured[1], "chosen-model")

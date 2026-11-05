@@ -15,7 +15,10 @@ def test_gateway_catalog_mapping_cache_scope_and_no_certification(tmp_path):
 
     provider = Provider("demo", "Demo", "https://example.test/api/v1", protocol="chat", execution_mode="gateway")
     config = Config(providers={"demo": provider}, path=tmp_path / "config.toml")
-    with patch("claudapter.catalog.get_token", return_value="fixture-one"), patch("protoverta.discovery.fetch_catalog", return_value=(ModelInfo("m", "Model", context_window_tokens=1000),)) as fetch:
+    with (
+        patch("claudapter.catalog.get_token", return_value="fixture-one"),
+        patch("protoverta.discovery.fetch_catalog", return_value=(ModelInfo("m", "Model", context_window_tokens=1000),)) as fetch,
+    ):
         assert fetch_models(config, provider) == [{"id": "m", "display_name": "Model"}]
         assert fetch.call_args.args[0] == provider.base_url
         assert cached_models(config, provider) == ([{"id": "m", "display_name": "Model"}], False)

@@ -13,8 +13,9 @@ def test_saved_effort_and_submissions_are_normalized_for_the_route():
     node = shutil.which("node")
     if not node:
         pytest.skip("Node is required for the frontend regression harness")
-    functions = "\n".join(re.search(r"  function " + name + r"\([^\n]+", _HTML).group(0)
-                          for name in ("reasoningDisabled", "compatibleEffort", "setProviderSaving", "choice"))
+    functions = "\n".join(
+        re.search(r"  function " + name + r"\([^\n]+", _HTML).group(0) for name in ("reasoningDisabled", "compatibleEffort", "setProviderSaving", "choice")
+    )
     initial = re.search(r"  api\('/api/config'\)[^\n]+", _HTML).group(0)
     harness = r"""
 const assert=require('node:assert/strict');
@@ -54,7 +55,8 @@ function notify(){throw Error('unexpected notification')}
   console.log('passed');
 })().catch(error=>{console.error(error);process.exitCode=1});
 """
-    result = subprocess.run([node, "-"], input=harness + functions + "\n" + initial + "\n" + checks,
-                            encoding="utf-8", capture_output=True, timeout=10, check=False)
+    result = subprocess.run(
+        [node, "-"], input=harness + functions + "\n" + initial + "\n" + checks, encoding="utf-8", capture_output=True, timeout=10, check=False
+    )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "passed"
