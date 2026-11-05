@@ -50,6 +50,6 @@ def agent_environment(prefix, options, model):
 
 
 def agent_models_toml(options):
-    import json
+    from .toml_text import toml_value
 
-    return "{ " + ", ".join(f"{key} = {json.dumps(value, ensure_ascii=False)}" for key, value in sorted(validate_agent_models(options).items())) + " }"
+    return "{ " + ", ".join(f"{key} = {toml_value(value)}" for key, value in sorted(validate_agent_models(options).items())) + " }"

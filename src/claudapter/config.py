@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import re
 import tempfile
@@ -10,6 +9,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .errors import ClaudapterError
+from .toml_text import toml_value
 
 
 @dataclass
@@ -195,14 +195,14 @@ def load(path: Path | None = None) -> Config:
 def save(config: Config) -> None:
     validate(config)
     path = config.path or config_path()
-    lines = ["schema_version = 1", "", "[defaults]", f"provider = {json.dumps(config.default_provider)}", f"model = {json.dumps(config.default_model)}", f"effort = {json.dumps(config.default_effort)}"]
+    lines = ["schema_version = 1", "", "[defaults]", f"provider = {toml_value(config.default_provider, ensure_ascii=True)}", f"model = {toml_value(config.default_model, ensure_ascii=True)}", f"effort = {toml_value(config.default_effort, ensure_ascii=True)}"]
     for provider in config.providers.values():
         lines += ["", "[[providers]]"]
         for name in ("id", "display_name", "base_url", "auth_mode", "default_model", "execution_mode", "protocol", "upstream_reasoning"):
-            lines.append(f"{name} = {json.dumps(getattr(provider, name), ensure_ascii=False)}")
+            lines.append(f"{name} = {toml_value(getattr(provider, name))}")
         registry_path, required = validate_capability_settings(provider.capabilities_file, provider.require_verified_capabilities, provider.execution_mode)
         if registry_path:
-            lines.extend([f"capabilities_file = {json.dumps(registry_path, ensure_ascii=False)}", f"require_verified_capabilities = {str(required).lower()}"])
+            lines.extend([f"capabilities_file = {toml_value(registry_path)}", f"require_verified_capabilities = {str(required).lower()}"])
         if provider.gateway_limits:
             from .gateway_options import limits_toml
             lines.append("gateway_limits = " + limits_toml(provider.gateway_limits))

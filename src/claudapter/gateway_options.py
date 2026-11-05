@@ -1,11 +1,11 @@
 """Validated optional gateway settings, without importing Protoverta."""
 
-import json
 import math
 import re
 from pathlib import Path
 
 from .errors import ClaudapterError
+from .toml_text import toml_value
 
 TIMEOUTS = {"timeout", "total_timeout", "progress_timeout"}
 COUNTS = {"max_concurrent_requests", "max_stream_bytes", "max_stream_items", "max_tool_argument_bytes"}
@@ -59,7 +59,7 @@ def validate_gateway_runtime(value, mode):
 
 
 def runtime_toml(value):
-    return "{ " + ", ".join(key + " = " + json.dumps(option, ensure_ascii=False) for key, option in sorted(value.items())) + " }"
+    return "{ " + ", ".join(key + " = " + toml_value(option) for key, option in sorted(value.items())) + " }"
 
 
 def runtime_options(value, mode, config_file):

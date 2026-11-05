@@ -16,6 +16,17 @@ from claudapter.errors import ClaudapterError
 
 
 class ConfigTests(unittest.TestCase):
+    def test_delete_character_round_trips_as_loadable_toml(self):
+        # JSON leaves U+007F raw, which TOML forbids; saved text must reload.
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.toml"
+            provider = Provider("demo", "Demo\x7fName", "https://example.test/api", "bearer", "model\x7fid",
+                                "gateway", "chat", "auto", agent_models={"policy": "custom", "default": "child-model"})
+            config = Config({"demo": provider}, "demo", "model\x7fid", "default", path)
+            save(config)
+            self.assertNotIn("\x7f", path.read_text(encoding="utf-8"))
+            self.assertEqual(load(path), config)
+
     def test_round_trip_and_secret_separation(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "config.toml"
