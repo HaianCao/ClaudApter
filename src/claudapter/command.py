@@ -3,6 +3,8 @@
 import json
 import os
 import shutil
+import signal
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -44,3 +46,24 @@ def command_prefix(executable: str, command: str, package: str) -> list[str]:
         return [node, str(target)]
     except (OSError, ValueError, TypeError, RecursionError):
         raise ValueError(error) from None
+
+
+@contextmanager
+def foreground_child():
+    """Let the interactive CLI own Ctrl+C while it runs in the foreground.
+
+    The console delivers Ctrl+C to the whole process group. Without this the
+    wrapper raised KeyboardInterrupt, killed the child after a short grace
+    period and closed the session gateway mid-request (for example during
+    `-p`/`exec`). A no-op Python handler is used instead of SIG_IGN because an
+    ignored disposition would be inherited by the child on POSIX.
+    """
+    try:
+        previous = signal.signal(signal.SIGINT, lambda *_: None)
+    except ValueError:  # Not the main thread; nothing to adjust.
+        yield
+        return
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGINT, previous)

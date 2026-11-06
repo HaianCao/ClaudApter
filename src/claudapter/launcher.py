@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 
 from .agent_models import agent_environment
-from .command import command_prefix
+from .command import command_prefix, foreground_child
 from .config import (
     EFFORTS,
     Config,
@@ -251,7 +251,8 @@ def launch(config: Config, provider: Provider, model: str, effort: str, extra: l
                 # Keep a possible [node.exe, cli.js] prefix intact. --model is
                 # our first Claude option, before user passthrough arguments.
                 index = args.index("--model")
-                return subprocess.run([*args[:index], *options, *args[index:]], env=env, check=False).returncode
+                with foreground_child():
+                    return subprocess.run([*args[:index], *options, *args[index:]], env=env, check=False).returncode
         except ValueError as exc:
             raise ClaudapterError(str(exc)) from None
 

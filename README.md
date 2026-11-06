@@ -80,6 +80,8 @@ provider set Claude Code's assumed context window and maximum output tokens
 (`CLAUDE_CODE_MAX_CONTEXT_TOKENS`, `CLAUDE_CODE_MAX_OUTPUT_TOKENS`) for the
 session; set them to the provider model's real limits.
 
+Tested providers (OpenRouter, NVIDIA NIM, TokenHarbor, AgentRouter), their known limits and recommended settings: [provider compatibility](https://github.com/HaianCao/Protoverta/blob/main/docs/compatibility/providers.md).
+
 This checkout prepares gateway preview **0.2.0a2** with Protoverta **0.3.0a8**.
 Until those snapshots are published, use the local installer with
 `-ProtovertaWheel PATH_TO_A8_WHEEL`; the public a6 wheel lacks the new runtime
