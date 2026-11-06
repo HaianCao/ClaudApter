@@ -151,6 +151,25 @@ def build_invocation(
     return args, env
 
 
+def _automatic_reasoning(upstream, base_url: str) -> tuple[str, str | None]:
+    """Resolve ``auto`` with whatever the installed core supports.
+
+    Returns (upstream_reasoning, reasoning_output or None). Older cores without
+    the route policy keep their own behaviour; a core predating automatic
+    reasoning keeps the provider default unchanged.
+    """
+    try:
+        from protoverta.automatic_reasoning import automatic_route_reasoning
+    except ImportError:
+        try:
+            from protoverta.automatic_reasoning import automatic_reasoning
+        except ImportError:
+            return "provider_default", None
+        return automatic_reasoning("messages", upstream, base_url)[0], None
+    policy, _, output = automatic_route_reasoning("messages", upstream.value)
+    return policy, None if output == "reject" else output
+
+
 def _gateway(config: Config, provider: Provider, model: str | None = None):
     try:
         from protoverta.core import Protocol
@@ -183,16 +202,9 @@ def _gateway(config: Config, provider: Provider, model: str | None = None):
             options.update(capabilities=CapabilityRegistry.load(path), require_verified_capabilities=required)
         reasoning_policy = provider.upstream_reasoning
         if reasoning_policy == "auto":
-            try:
-                from protoverta.automatic_reasoning import automatic_route_reasoning
-            except ImportError:  # Older pinned core: keep its documented behaviour.
-                from protoverta.automatic_reasoning import automatic_reasoning
-
-                reasoning_policy, _ = automatic_reasoning("messages", upstream, base_url)
-            else:
-                reasoning_policy, _, reasoning_output = automatic_route_reasoning("messages", upstream.value)
-                if reasoning_output != "reject":
-                    options["reasoning_output"] = reasoning_output
+            reasoning_policy, reasoning_output = _automatic_reasoning(upstream, base_url)
+            if reasoning_output is not None:
+                options["reasoning_output"] = reasoning_output
         gateway = GatewayConfig(
             upstream,
             base_url,

@@ -88,3 +88,13 @@ def test_direct_auto_does_not_disable_native_thinking(monkeypatch):
     provider = Provider("demo", "Demo", "https://example.test/v1", upstream_reasoning="auto")
     args, env = build_invocation(Config(), provider, "m", "high", [])
     assert "MAX_THINKING_TOKENS" not in env and "--settings" not in args
+
+
+def test_auto_reasoning_falls_back_on_cores_without_the_policy_module(monkeypatch):
+    # A launcher update can meet an older installed core (upgrade gate: a6).
+    import sys
+
+    from claudapter import launcher
+
+    monkeypatch.setitem(sys.modules, "protoverta.automatic_reasoning", None)
+    assert launcher._automatic_reasoning(None, "https://example.test/v1") == ("provider_default", None)
