@@ -60,6 +60,19 @@ function Set-AdapterCurrentEnvironment([string]$Root, [string]$Id) {
     finally { if (Test-Path -LiteralPath $pending) { Remove-Item -LiteralPath $pending -Force } }
 }
 
+function Assert-AdapterReleaseAsset {
+    param([string]$Uri)
+    # Fail before creating a venv, with an actionable message, when the pinned
+    # Protoverta release asset is not published (or GitHub is unreachable).
+    try {
+        $response = Invoke-WebRequest -UseBasicParsing -Method Head -Uri $Uri -MaximumRedirection 5 -TimeoutSec 30
+        if ($response.StatusCode -ne 200) { throw "HTTP $($response.StatusCode)" }
+    }
+    catch {
+        throw "The pinned Protoverta gateway release asset is not available ($Uri): $($_.Exception.Message.TrimEnd('.')). Previous installation was preserved. Retry later, or pass -ProtovertaWheel PATH with a locally built wheel of the same version."
+    }
+}
+
 function New-AdapterEnvironment {
     param([string]$Root, [string]$Python, [string]$Target, [string[]]$GatewayPackages,
           [string]$Module, [string]$Command)

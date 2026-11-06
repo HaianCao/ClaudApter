@@ -53,8 +53,39 @@ def _probe(prefix: tuple[str, ...], identity: tuple) -> tuple[int, int, int] | N
         return None
 
 
+# Releases exercised end to end with the launcher (loopback client smoke, tool
+# loops, model picker). Claude Code auto-updates, so newer 2.1.x releases keep
+# the same settings with a visible warning instead of a hard failure.
+VERIFIED_VERSIONS = frozenset({(2, 1, 308), (2, 1, 318)})
+MINIMUM_SCHEMA_VERSION = (2, 1, 308)
+
+
+def schema_supported(version: tuple[int, int, int] | None) -> bool:
+    """True for verified releases and newer releases of the same 2.1 series."""
+    return version is not None and version[:2] == MINIMUM_SCHEMA_VERSION[:2] and version >= MINIMUM_SCHEMA_VERSION
+
+
+def describe(version: tuple[int, int, int] | None) -> str:
+    return "an unknown version" if version is None else ".".join(map(str, version))
+
+
+def require_schema(version: tuple[int, int, int] | None, feature: str, exception: type[Exception]) -> tuple[int, int, int]:
+    """Allow verified/newer 2.1.x releases (newer ones warn); reject others."""
+    if not schema_supported(version):
+        raise exception(
+            f"{feature} requires Claude Code {describe(MINIMUM_SCHEMA_VERSION)} or a newer 2.1.x release; found {describe(version)}. Update Claude Code or choose Inherit harness settings."
+        )
+    if version not in VERIFIED_VERSIONS:
+        warnings.warn(
+            f"{feature} is verified with Claude Code {', '.join(sorted(map(describe, VERIFIED_VERSIONS)))}; continuing with the same settings on {describe(version)}.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+    return version
+
+
 def cross_protocol_environment(prefix: list[str]) -> dict[str, str]:
-    if detect_version(prefix) != (2, 1, 308):
+    if detect_version(prefix) not in VERIFIED_VERSIONS:
         warnings.warn(
             "Claude Code version is not verified for translated routes; retaining conservative compatibility settings. Subagents remain unverified.",
             RuntimeWarning,

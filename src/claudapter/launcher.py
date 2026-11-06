@@ -104,9 +104,9 @@ def build_invocation(
     env.update(managed_agents)
     settings = {"env": managed_agents} if managed_agents else {}
     if provider.execution_mode == "gateway":
-        from .harness import detect_version
+        from .harness import detect_version, schema_supported
 
-        if detect_version(prefix) == (2, 1, 308):
+        if schema_supported(detect_version(prefix)):
             from .catalog import cached_model_names
 
             identifiers = tuple(dict.fromkeys((model,) + tuple(value for key, value in provider.agent_models.items() if key != "policy")))

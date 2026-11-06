@@ -60,7 +60,7 @@ In the setup page:
 
 When you choose **Run Claude Code**, the setup page stops and Claude Code takes over the terminal where you launched `claude-ca setup`. Direct mode passes the provider key through the child environment; gateway mode keeps it in the local gateway and gives Claude Code a temporary local credential.
 
-**Run Claude Code** uses the current selection for this session. Choose **Save as default** explicitly to change wrapper defaults. On verified Claude Code 2.1.308 gateway sessions, `/model` lists the selected main and configured auxiliary models without renaming their IDs. Press **s** in the native picker to apply a model only to this session; **Enter** or `/model MODEL_ID` follows Claude Code's explicit save-default behavior. Discovery is not capability certification, and manual model IDs remain available.
+**Run Claude Code** uses the current selection for this session. Choose **Save as default** explicitly to change wrapper defaults. On Claude Code 2.1.308 or newer 2.1.x gateway sessions (verified on 2.1.308 and 2.1.318), `/model` lists the selected main and configured auxiliary models without renaming their IDs. Press **s** in the native picker to apply a model only to this session; **Enter** or `/model MODEL_ID` follows Claude Code's explicit save-default behavior. Discovery is not capability certification, and manual model IDs remain available.
 
 ### Optional local gateway
 
@@ -145,7 +145,7 @@ If Claude Code's `/status` shows a different gateway or credential from the one 
 ## Session tools
 
 The integration preview has a local-fixture check for one foreground subagent
-using the selected provider/model on Claude Code **2.1.308**, through native
+using the selected provider/model on Claude Code **2.1.308** and **2.1.318**, through native
 Messages or translated Chat/Responses. It verifies a separate child request,
 a successful read-only tool result and completion reported by the harness.
 Choose the **selected** agent-model policy to keep the same-model default.

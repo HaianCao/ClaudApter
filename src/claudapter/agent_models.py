@@ -1,7 +1,7 @@
 """Explicit session policy for Claude auxiliary and subagent models."""
 
 from .errors import ClaudapterError
-from .harness import detect_version
+from .harness import detect_version, require_schema
 
 ROLES = ("haiku", "sonnet", "opus", "fable")
 _ALIASES = {"default", "inherit", "haiku", "sonnet", "opus", "fable", "opusplan"}
@@ -43,8 +43,7 @@ def agent_environment(prefix, options, model):
     policy = options.get("policy", "inherit")
     if policy == "inherit":
         return {}
-    if detect_version(prefix) != (2, 1, 308):
-        raise ClaudapterError("Agent model overrides are verified with Claude Code 2.1.308 only. Choose Inherit harness settings for another version.")
+    require_schema(detect_version(prefix), "Agent model overrides", ClaudapterError)
     selected = _model(model)
     managed = {f"ANTHROPIC_DEFAULT_{role.upper()}_MODEL": options.get(role, selected) for role in ROLES}
     managed["CLAUDE_CODE_SUBAGENT_MODEL"] = options.get("default", selected)

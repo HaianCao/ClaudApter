@@ -131,7 +131,9 @@ try {
         }
         $installTarget = "${repoRoot}[gateway]"
         if (-not $ProtovertaWheel) {
-            $gatewayPackages += 'https://github.com/HaianCao/Protoverta/releases/download/v0.3.0a8/protoverta-0.3.0a8-py3-none-any.whl'
+            $protovertaAsset = 'https://github.com/HaianCao/Protoverta/releases/download/v0.3.0a8/protoverta-0.3.0a8-py3-none-any.whl'
+            Assert-AdapterReleaseAsset $protovertaAsset
+            $gatewayPackages += $protovertaAsset
         }
     }
     $candidate = New-AdapterEnvironment -Root $installRoot -Python $pythonExe -Target $installTarget -GatewayPackages $gatewayPackages -Module 'claudapter' -Command 'claude-ca'

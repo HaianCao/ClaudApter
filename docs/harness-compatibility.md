@@ -33,9 +33,11 @@ over this overlay. Extra user CLI settings and managed organization restrictions
 remain outside the wrapper's enforcement. Family aliases are not accepted as
 exact IDs in these policies, preventing self-referencing alias definitions.
 
-Non-inherited policies currently require observed Claude Code 2.1.308. Unknown
-versions fail the explicit override at preflight; choose inherit to retain the
-existing harness behavior. Native routes query the version only when requesting
+Non-inherited policies and the session model picker are verified with Claude
+Code 2.1.308 and 2.1.318 (loopback client smoke). Newer 2.1.x releases keep the
+same settings and print a warning, because Claude Code auto-updates. Unknown,
+older or other-series versions fail the explicit override at preflight; choose
+inherit to retain the existing harness behavior. Native routes query the version only when requesting
 this additional policy. Model IDs are not rewritten into a fake Claude family.
 
 An agent-only effort override is not exposed: setting the global effort env would
