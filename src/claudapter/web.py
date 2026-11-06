@@ -20,6 +20,7 @@ from .config import (
     validate,
     validate_base_url,
     validate_capability_settings,
+    validate_model_limits,
     validate_provider_id,
 )
 from .credentials import env_path, get_token, remove_token, store_token
@@ -57,6 +58,7 @@ def public_config(config: Config) -> dict:
     }
     for provider in result["providers"]:
         provider["gateway_limits"] = config.providers[provider["id"]].gateway_limits
+        provider["model_limits"] = config.providers[provider["id"]].model_limits
         provider["gateway_runtime"] = config.providers[provider["id"]].gateway_runtime
         provider["agent_models"] = config.providers[provider["id"]].agent_models
     return result
@@ -313,6 +315,7 @@ def serve(config: Config) -> int:
                     provider.agent_models = validate_agent_models(
                         body.get("agent_models", old_provider.agent_models if old_provider else {"policy": "selected"})
                     )
+                    provider.model_limits = validate_model_limits(body.get("model_limits", old_provider.model_limits if old_provider else {}))
                     updated = copy.deepcopy(config)
                     updated.providers[provider_id] = provider
                     persist_provider_change(config, updated, provider_id, str(body["api_key"]) if body.get("api_key") else None)

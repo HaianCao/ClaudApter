@@ -65,10 +65,20 @@ When you choose **Run Claude Code**, the setup page stops and Claude Code takes 
 ### Optional local gateway
 
 Reasoning compatibility is automatic for new providers. Native Messages keeps
-the provider's reasoning behavior; translated connections request reasoning off
-using the appropriate endpoint policy. Manual overrides remain under **Advanced:
-reasoning settings**. Models requiring incompatible reasoning can still be
-unsupported; returned reasoning is never silently hidden.
+the provider's reasoning behavior. On translated Chat/Responses connections the
+model keeps its default reasoning and the gateway explicitly omits reasoning
+output that Claude Code's Messages protocol cannot represent (it is never shown
+as answer text, given a fake signature or sent elsewhere). Many current models
+reason on every turn and reject or ignore a "reasoning off" request, so this is
+what keeps them usable. Choose a manual **disabled** policy under **Advanced:
+reasoning settings** to request less reasoning compute where a model honours it.
+
+The launcher sets `CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK=1` for the session
+(unless you set it), so Claude Code does not switch a flagged request to a
+built-in Claude model the provider does not serve. **Model limits** on a
+provider set Claude Code's assumed context window and maximum output tokens
+(`CLAUDE_CODE_MAX_CONTEXT_TOKENS`, `CLAUDE_CODE_MAX_OUTPUT_TOKENS`) for the
+session; set them to the provider model's real limits.
 
 This checkout prepares gateway preview **0.2.0a2** with Protoverta **0.3.0a8**.
 Until those snapshots are published, use the local installer with

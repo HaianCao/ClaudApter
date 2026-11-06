@@ -27,6 +27,30 @@ class Provider:
     gateway_limits: dict = field(default_factory=dict)
     gateway_runtime: dict = field(default_factory=dict)
     agent_models: dict = field(default_factory=dict)
+    model_limits: dict = field(default_factory=dict)
+
+
+MODEL_LIMITS = {
+    # Claude Code assumes built-in sizes for model IDs it does not recognise.
+    "context_window": "CLAUDE_CODE_MAX_CONTEXT_TOKENS",
+    "max_output_tokens": "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
+}
+
+
+def validate_model_limits(value) -> dict:
+    if not isinstance(value, dict) or set(value) - set(MODEL_LIMITS):
+        raise ClaudapterError("model_limits accepts context_window and max_output_tokens only.")
+    for number in value.values():
+        if type(number) is not int or not 1 <= number <= 100_000_000:
+            raise ClaudapterError("Model limits must be positive whole token counts.")
+    if "context_window" in value and value.get("max_output_tokens", 0) >= value["context_window"]:
+        raise ClaudapterError("Maximum output tokens must be smaller than the context window.")
+    return dict(value)
+
+
+def model_limit_environment(value) -> dict[str, str]:
+    """Session-only Claude Code overrides for a provider's model size."""
+    return {MODEL_LIMITS[key]: str(number) for key, number in sorted(validate_model_limits(value).items())}
 
 
 @dataclass
@@ -147,6 +171,7 @@ def validate(config: Config) -> None:
         from .agent_models import validate_agent_models
 
         validate_agent_models(provider.agent_models)
+        validate_model_limits(provider.model_limits)
         validate_capability_settings(provider.capabilities_file, provider.require_verified_capabilities, provider.execution_mode)
         if provider.id != provider_id or not provider.display_name.strip():
             raise ClaudapterError(f"Invalid provider: {provider_id}")
@@ -234,6 +259,9 @@ def save(config: Config) -> None:
             from .agent_models import agent_models_toml
 
             lines.append("agent_models = " + agent_models_toml(provider.agent_models))
+        if provider.model_limits:
+            limits = validate_model_limits(provider.model_limits)
+            lines.append("model_limits = { " + ", ".join(f"{key} = {limits[key]}" for key in sorted(limits)) + " }")
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:

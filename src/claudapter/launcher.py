@@ -15,6 +15,7 @@ from .config import (
     Provider,
     claude_base_url,
     config_path,
+    model_limit_environment,
     secret_var,
     validate_capability_settings,
 )
@@ -99,6 +100,11 @@ def build_invocation(
     else:
         env["ANTHROPIC_BASE_URL"] = claude_base_url(provider.base_url)
         env["ANTHROPIC_AUTH_TOKEN" if provider.auth_mode == "bearer" else "ANTHROPIC_API_KEY"] = token
+    # Claude Code 2.1.312+ may switch to a built-in Claude model when a request
+    # is flagged; provider/gateway model IDs have no such fallback. An explicit
+    # user value is respected.
+    env.setdefault("CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK", "1")
+    env.update(model_limit_environment(provider.model_limits))
     args = [*prefix, "--model", model]
     managed_agents = agent_environment(prefix, provider.agent_models, model)
     env.update(managed_agents)
@@ -177,9 +183,16 @@ def _gateway(config: Config, provider: Provider, model: str | None = None):
             options.update(capabilities=CapabilityRegistry.load(path), require_verified_capabilities=required)
         reasoning_policy = provider.upstream_reasoning
         if reasoning_policy == "auto":
-            from protoverta.automatic_reasoning import automatic_reasoning
+            try:
+                from protoverta.automatic_reasoning import automatic_route_reasoning
+            except ImportError:  # Older pinned core: keep its documented behaviour.
+                from protoverta.automatic_reasoning import automatic_reasoning
 
-            reasoning_policy, _ = automatic_reasoning("messages", upstream, base_url)
+                reasoning_policy, _ = automatic_reasoning("messages", upstream, base_url)
+            else:
+                reasoning_policy, _, reasoning_output = automatic_route_reasoning("messages", upstream.value)
+                if reasoning_output != "reject":
+                    options["reasoning_output"] = reasoning_output
         gateway = GatewayConfig(
             upstream,
             base_url,

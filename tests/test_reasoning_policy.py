@@ -58,21 +58,24 @@ def test_native_reasoning_override_does_not_disable_unrelated_features():
 
 
 @pytest.mark.parametrize(
-    "protocol,base,policy",
+    "protocol,base,output",
     [
-        ("messages", "https://example.test/v1", "provider_default"),
-        ("chat", "https://openrouter.ai/api/v1", "openrouter_disabled"),
-        ("chat", "https://openrouter.ai.evil.test/api/v1", "disabled"),
-        ("responses", "https://example.test/v1", "disabled"),
+        ("messages", "https://example.test/v1", "reject"),
+        ("chat", "https://openrouter.ai/api/v1", "omit"),
+        ("chat", "https://integrate.api.nvidia.com/v1", "omit"),
+        ("responses", "https://example.test/v1", "omit"),
     ],
 )
-def test_auto_reasoning_uses_exact_route_and_endpoint(tmp_path, monkeypatch, protocol, base, policy):
+def test_auto_reasoning_keeps_provider_default_and_omits_unrepresentable_output(tmp_path, monkeypatch, protocol, base, output):
+    # Live checks: disabling reasoning returned HTTP 400 for mandatory-reasoning
+    # models and was ignored by others, so auto never sends a disable request.
     pytest.importorskip("protoverta.automatic_reasoning")
     provider = Provider("demo", "Demo", base, protocol=protocol, execution_mode="gateway", upstream_reasoning="auto")
     config = Config({"demo": provider}, path=tmp_path / "config.toml")
     monkeypatch.setattr("claudapter.launcher.get_token", lambda *_: "synthetic")
     gateway, _ = _gateway(config, provider)
-    assert gateway.upstream_reasoning == policy
+    assert gateway.upstream_reasoning == "provider_default"
+    assert gateway.reasoning_output == output and gateway.public_reasoning is False
     assert provider.upstream_reasoning == "auto"
     save(config)
     assert load(config.path).providers["demo"].upstream_reasoning == "auto"
