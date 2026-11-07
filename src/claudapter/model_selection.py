@@ -18,7 +18,7 @@ def _fallback_status(provider):
         count_category = "unavailable"
     return {
         "status": "unverified",
-        "message": f"Unverified route. Model discovery is not capability certification. Token count: {count_category}; context window: unavailable.",
+        "message": f"Unverified route. Model discovery is not capability certification. Token count: {count_category}.",
         "context_preflight": preflight,
         "token_count_mode": count_mode,
         "count_category": count_category,

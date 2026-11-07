@@ -18,6 +18,7 @@ from .config import (
     model_limit_environment,
     secret_var,
     validate_capability_settings,
+    validate_model_limits,
 )
 from .credentials import get_token, validate_token
 from .errors import ClaudapterError
@@ -31,6 +32,33 @@ def _bypass_loopback_proxy(env: dict[str, str]) -> None:
     entries.extend(("127.0.0.1", "localhost", "::1"))
     merged = ",".join({value.casefold(): value for value in entries}.values())
     env.update(NO_PROXY=merged, no_proxy=merged)
+
+
+def session_model_limits(config: Config, provider: Provider, model: str, token=None) -> dict:
+    """Model limits for this launch.
+
+    Limits set on the provider win. Any limit left empty comes from the
+    selected model's maximum as the provider reports it in its model list
+    (cached by setup or ``models list``); providers that report nothing keep
+    Claude Code's own defaults.
+    """
+    from .catalog import cached_model_limits, launch_limits
+
+    manual = dict(provider.model_limits)
+    try:
+        reported = cached_model_limits(config, provider, model, token=token)
+    except (OSError, RuntimeError, ValueError):
+        reported = {}  # Never fail a launch over the optional catalog cache.
+    limits = {**launch_limits(reported), **manual}
+    context, output = limits.get("context_window"), limits.get("max_output_tokens")
+    if context and output and "max_output_tokens" not in manual:
+        # A reported output maximum keeps half of the session's window for input.
+        limits["max_output_tokens"] = min(output, context // 2)
+    try:
+        validate_model_limits(limits)
+    except ClaudapterError:
+        return manual
+    return limits
 
 
 def build_invocation(
@@ -104,7 +132,7 @@ def build_invocation(
     # is flagged; provider/gateway model IDs have no such fallback. An explicit
     # user value is respected.
     env.setdefault("CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK", "1")
-    env.update(model_limit_environment(provider.model_limits))
+    env.update(model_limit_environment(session_model_limits(config, provider, model, token)))
     args = [*prefix, "--model", model]
     managed_agents = agent_environment(prefix, provider.agent_models, model)
     env.update(managed_agents)

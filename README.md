@@ -9,7 +9,8 @@
     <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-b5653a?style=flat-square"></a>
     <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776ab?style=flat-square&logo=python&logoColor=white">
     <img alt="Windows" src="https://img.shields.io/badge/platform-Windows-0078d4?style=flat-square&logo=windows&logoColor=white">
-    <img alt="pytest" src="https://img.shields.io/badge/tests-pytest-a54c70?style=flat-square">
+    <a href="https://github.com/HaianCao/ClaudApter/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/HaianCao/ClaudApter/ci.yml?branch=main&style=flat-square&label=tests"></a>
+    <a href="https://github.com/HaianCao/Protoverta"><img alt="Gateway: Protoverta" src="https://img.shields.io/badge/gateway-Protoverta-2f6f8f?style=flat-square"></a>
   </p>
   <p><a href="#quick-start">Quick start</a> &middot; <a href="#configure-a-provider">Providers</a> &middot; <a href="#use-claudapter">CLI</a> &middot; <a href="#privacy-and-security">Security</a></p>
 </div>
@@ -27,7 +28,7 @@ ClaudApter is a lightweight launcher and configuration studio for the official C
 - Launch Claude Code in the current terminal, or select a different provider/model for one run.
 - Keep API keys local and separate from the provider configuration file.
 
-Connect native Anthropic Messages providers directly, or translate Chat Completions and Responses providers through the optional local Protoverta gateway. Model discovery is optional; you can enter model IDs yourself when a provider does not offer it. A catalog entry does not guarantee Claude Code compatibility; [Anthropic does not support routing Claude Code to non-Claude models through third-party gateways](https://code.claude.com/docs/en/llm-gateway).
+Connect native Anthropic Messages providers directly, or translate Chat Completions and Responses providers through the optional local [Protoverta](https://github.com/HaianCao/Protoverta) gateway. Model discovery is optional; you can enter model IDs yourself when a provider does not offer it. A catalog entry does not guarantee Claude Code compatibility; [Anthropic does not support routing Claude Code to non-Claude models through third-party gateways](https://code.claude.com/docs/en/llm-gateway).
 
 ## Quick start
 
@@ -53,7 +54,11 @@ Windows supports native CLI executables and standard npm global or project insta
 
 In the setup page:
 
-1. Select **Add**, enter a provider ID and display name, and choose the upstream protocol. For Messages, enter `https://gateway.example.com/v1` or the URL without `/v1`; the suffix is joined exactly once. For Chat or Responses, enter the exact API prefix, such as `https://gateway.example.com/v1` or `/api/v4`, without the endpoint suffix; gateway mode is required.
+**Quick start:** select **Add**, pick **OpenRouter**, **NVIDIA NIM** or **TokenHarbor** under *Start from a tested provider*, paste your API key and select **Save provider**. The address, protocol and connection mode are filled in for you; then pick a model and select **Run Claude Code**.
+
+For any other provider:
+
+1. Select **Add**, enter a display name (the provider ID is derived from it), and choose the upstream protocol. For Messages, enter `https://gateway.example.com/v1` or the URL without `/v1`; the suffix is joined exactly once. For Chat or Responses, enter the exact API prefix, such as `https://gateway.example.com/v1` or `/api/v4`, without the endpoint suffix; gateway mode is required.
 2. Choose **Bearer token** (recommended for gateways) for `Authorization: Bearer ...`. Choose **API key** for `x-api-key` only if your provider requires it, then enter the key without a `Bearer ` prefix.
 3. Select **Refresh models** to query the provider's model catalog, or type a model ID directly.
 4. Choose an effort level and select **Save as default** or **Run Claude Code**.
@@ -77,17 +82,19 @@ The launcher sets `CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK=1` for the session
 (unless you set it), so Claude Code does not switch a flagged request to a
 built-in Claude model the provider does not serve. **Auto mode** was checked live on
 Claude Code 2.1.319 through the gateway and runs tool calls; see the provider
-notes in Protoverta's `docs/compatibility/providers.md`. **Model limits** on a
-provider set Claude Code's assumed context window and maximum output tokens
-(`CLAUDE_CODE_MAX_CONTEXT_TOKENS`, `CLAUDE_CODE_MAX_OUTPUT_TOKENS`) for the
-session; set them to the provider model's real limits.
+notes in Protoverta's `docs/compatibility/providers.md`. **Model limits**
+(`CLAUDE_CODE_MAX_CONTEXT_TOKENS`, `CLAUDE_CODE_MAX_OUTPUT_TOKENS`) are set
+automatically from the selected model's maximums when the provider reports them
+in its model list (OpenRouter and TokenHarbor do; NVIDIA NIM does not). The
+output limit is capped at half the context window so long conversations keep
+room for input. Values you enter under **Model limits** on a provider always
+win; leave them empty to use the reported maximums.
 
 Tested providers (OpenRouter, NVIDIA NIM, TokenHarbor, AgentRouter), their known limits and recommended settings: [provider compatibility](https://github.com/HaianCao/Protoverta/blob/main/docs/compatibility/providers.md).
 
-This checkout prepares gateway preview **0.2.0a2** with Protoverta **0.3.0a11**.
-Until those snapshots are published, use the local installer with
-`-ProtovertaWheel PATH_TO_A8_WHEEL`; the public a6 wheel lacks the new runtime
-options. Once the matching preview/core are published, install with:
+This branch is gateway preview **0.2.0a2**, pinned to [Protoverta](https://github.com/HaianCao/Protoverta) **0.3.0a11**.
+The pinned Protoverta release is published, so the gateway preview installs in
+one line:
 
 ```powershell
 & ([scriptblock]::Create((irm "https://raw.githubusercontent.com/HaianCao/ClaudApter/integration/protoverta/scripts/install.ps1"))) -WithGateway -SourceBranch integration/protoverta
@@ -141,8 +148,8 @@ Environment reset clears only `CLAUDE_CA_CONFIG`, `CLAUDE_CA_CACHE` and `CLAUDE_
 
 Optional advanced gateway policies support evidence-scoped provider profile
 files, shared quota databases and bounded HTTP-rejection retries. Leave them
-blank for existing behavior. They require the matching unpublished Protoverta
-source build, not the older public alpha-6 wheel. Use the same absolute database
+blank for existing behavior. They require the pinned Protoverta
+release, which the gateway preview installs. Use the same absolute database
 path in both launchers to coordinate the same upstream prefix/credential.
 These policies do not change direct mode or enable model fallback.
 

@@ -19,9 +19,10 @@ def test_gateway_catalog_mapping_cache_scope_and_no_certification(tmp_path):
         patch("claudapter.catalog.get_token", return_value="fixture-one"),
         patch("protoverta.discovery.fetch_catalog", return_value=(ModelInfo("m", "Model", context_window_tokens=1000),)) as fetch,
     ):
-        assert fetch_models(config, provider) == [{"id": "m", "display_name": "Model"}]
+        # Reported limits are listed as metadata; they are not a capability certification.
+        assert fetch_models(config, provider) == [{"id": "m", "display_name": "Model", "context_window_tokens": 1000}]
         assert fetch.call_args.args[0] == provider.base_url
-        assert cached_models(config, provider) == ([{"id": "m", "display_name": "Model"}], False)
+        assert cached_models(config, provider) == ([{"id": "m", "display_name": "Model", "context_window_tokens": 1000}], False)
     with patch("claudapter.catalog.get_token", return_value="fixture-two"):
         assert cached_models(config, provider) == ([], True)
     body = cache_path(config).read_text()

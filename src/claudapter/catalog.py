@@ -110,6 +110,54 @@ def request_json(request: urllib.request.Request, timeout: float = 12, *, budget
         raise ClaudapterError(f"Provider request failed: {type(exc).__name__}.") from None
 
 
+# Token limits that providers report in their model lists. These are the
+# provider's own numbers (OpenRouter and TokenHarbor report them; NVIDIA NIM
+# does not); nothing is estimated. The first positive integer found wins.
+_CONTEXT_FIELDS = ("context_window_tokens", "context_window", "context_length", "max_input_tokens", "top_provider.context_length")
+_OUTPUT_FIELDS = ("max_output_tokens", "max_completion_tokens", "top_provider.max_completion_tokens")
+_GATEWAY_CONTEXT_FIELD, _GATEWAY_OUTPUT_FIELD = "context_length", "top_provider.max_completion_tokens"
+_MAX_REPORTED_TOKENS = 2**31 - 1
+
+
+def _reported_number(entry, paths):
+    for path in paths:
+        value = entry
+        for key in path.split("."):
+            value = value.get(key) if isinstance(value, dict) else None
+        if type(value) is int and 0 < value <= _MAX_REPORTED_TOKENS:
+            return value
+    return None
+
+
+def reported_limits(entry) -> dict:
+    """``context_window_tokens`` and ``max_output_tokens`` a model list reports, or ``None``."""
+    return {"context_window_tokens": _reported_number(entry, _CONTEXT_FIELDS), "max_output_tokens": _reported_number(entry, _OUTPUT_FIELDS)}
+
+
+def _present_limits(entry) -> dict:
+    """Only the limits that were reported, so models without them keep their usual shape."""
+    return {key: value for key, value in reported_limits(entry).items() if value is not None}
+
+
+def launch_limits(reported) -> dict:
+    """Model limits for a launch: the model's reported maximums.
+
+    The output limit is capped at half the context window, so a long
+    conversation still has room for input (input plus max output must fit the
+    window; some models report an output maximum close to the whole window).
+    """
+    context = reported.get("context_window_tokens") if isinstance(reported, dict) else None
+    output = reported.get("max_output_tokens") if isinstance(reported, dict) else None
+    limits = {}
+    if type(context) is int and context > 1:
+        limits["context_window"] = context
+        if type(output) is int and output > 0:
+            limits["max_output_tokens"] = min(output, context // 2)
+    elif type(output) is int and output > 0:
+        limits["max_output_tokens"] = output
+    return limits
+
+
 def _identity(config, provider, *, token=_UNSET):
     from .gateway_options import catalog_policy_fingerprint
 
@@ -148,7 +196,11 @@ def _gateway_models(config, provider, headers=None, budget=None, *, timeout=12):
             raise ValueError("Catalog timeout must be a finite positive number.")
         from protoverta.discovery import CatalogPolicy, fetch_catalog
 
-        policy = CatalogPolicy(pagination="after_id" if provider.protocol == "messages" else "none")
+        policy = CatalogPolicy(
+            pagination="after_id" if provider.protocol == "messages" else "none",
+            context_field=_GATEWAY_CONTEXT_FIELD,
+            output_field=_GATEWAY_OUTPUT_FIELD,
+        )
         policy_file = provider.gateway_runtime.get("catalog_policy_file")
         if policy_file:
             path = Path(policy_file).expanduser()
@@ -163,10 +215,20 @@ def _gateway_models(config, provider, headers=None, budget=None, *, timeout=12):
                 request.adapter_deadline = active_budget
                 return _OPENER.open(request, timeout=min(timeout, active_budget.remaining()))
 
-            return [
-                item.as_dict()
-                for item in fetch_catalog(provider.base_url, _headers(config, provider) if headers is None else headers, policy, upstream_open=upstream_open)
-            ]
+            request_headers = _headers(config, provider) if headers is None else headers
+            try:
+                items = fetch_catalog(provider.base_url, request_headers, policy, upstream_open=upstream_open)
+            except ValueError as exc:
+                # A provider may report limits in another shape; the strict
+                # parser then rejects the page. Limits are optional, so list
+                # the models without them rather than failing discovery.
+                if not policy_file and "token limits" in str(exc):
+                    items = fetch_catalog(
+                        provider.base_url, request_headers, replace(policy, context_field=None, output_field=None), upstream_open=upstream_open
+                    )
+                else:
+                    raise
+            return [item.as_dict() for item in items]
     except ImportError:
         raise ClaudapterError("Gateway discovery requires the matching Protoverta preview.") from None
     except (ValueError, OSError, TypeError):
@@ -192,7 +254,11 @@ def _direct_models(config, provider, headers, timeout, budget=None):
                 for entry in entries:
                     if isinstance(entry, dict) and isinstance(entry.get("id"), str) and entry["id"]:
                         name = entry.get("display_name") or entry.get("name")
-                        models[entry["id"]] = {"id": entry["id"], "display_name": name if isinstance(name, str) and name else entry["id"]}
+                        models[entry["id"]] = {
+                            "id": entry["id"],
+                            "display_name": name if isinstance(name, str) and name else entry["id"],
+                            **_present_limits(entry),
+                        }
                 if not data.get("has_more"):
                     break
                 next_cursor = data.get("last_id")
@@ -240,7 +306,7 @@ def fetch_models(config: Config, provider: Provider, *, timeout=12, cache_sink=N
     identity = _identity(config, provider, token=token)
     gateway_info = _gateway_models(config, provider, headers, budget, timeout=timeout) if provider.execution_mode == "gateway" else None
     models = (
-        {item["id"]: {"id": item["id"], "display_name": item["display_name"]} for item in gateway_info}
+        {item["id"]: {"id": item["id"], "display_name": item["display_name"], **_present_limits(item)} for item in gateway_info}
         if gateway_info is not None
         else _direct_models(config, provider, headers, timeout, budget)
     )
@@ -303,6 +369,25 @@ def cached_models(config: Config, provider: Provider) -> tuple[list[dict[str, st
         return entry["models"], now - saved_at > 86_400
     except (OSError, ValueError, TypeError, AttributeError, RecursionError):
         return [], True
+
+
+def cached_model_limits(config, provider, model, *, token=_UNSET) -> dict:
+    """Reported limits for ``model`` from this provider's catalog cache, or ``{}``."""
+    try:
+        with cache_path(config).open("rb") as source:
+            raw = source.read(8 * 1024 * 1024 + 1)
+        if len(raw) > 8 * 1024 * 1024:
+            return {}
+        entry = _decode_json(raw).get(provider.id, {})
+        if not isinstance(entry, dict) or entry.get("identity") != _identity(config, provider, token=token):
+            return {}
+        models = entry.get("models", [])
+        if not isinstance(models, list) or len(models) > 100000:
+            return {}
+        item = next((value for value in models if isinstance(value, dict) and value.get("id") == model), None)
+        return reported_limits(item) if item else {}
+    except (OSError, RuntimeError, ValueError, TypeError, AttributeError, RecursionError):
+        return {}
 
 
 def probe_messages(config: Config, provider: Provider, model: str) -> dict:
