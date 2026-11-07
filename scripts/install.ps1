@@ -131,7 +131,7 @@ try {
         }
         $installTarget = "${repoRoot}[gateway]"
         if (-not $ProtovertaWheel) {
-            $protovertaAsset = 'https://github.com/HaianCao/Protoverta/releases/download/v0.3.0a8/protoverta-0.3.0a8-py3-none-any.whl'
+            $protovertaAsset = 'https://github.com/HaianCao/Protoverta/releases/download/v0.3.0a10/protoverta-0.3.0a10-py3-none-any.whl'
             Assert-AdapterReleaseAsset $protovertaAsset
             $gatewayPackages += $protovertaAsset
         }
