@@ -84,7 +84,7 @@ session; set them to the provider model's real limits.
 
 Tested providers (OpenRouter, NVIDIA NIM, TokenHarbor, AgentRouter), their known limits and recommended settings: [provider compatibility](https://github.com/HaianCao/Protoverta/blob/main/docs/compatibility/providers.md).
 
-This checkout prepares gateway preview **0.2.0a2** with Protoverta **0.3.0a10**.
+This checkout prepares gateway preview **0.2.0a2** with Protoverta **0.3.0a11**.
 Until those snapshots are published, use the local installer with
 `-ProtovertaWheel PATH_TO_A8_WHEEL`; the public a6 wheel lacks the new runtime
 options. Once the matching preview/core are published, install with:
