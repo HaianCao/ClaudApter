@@ -118,7 +118,9 @@ def test_uninstall_choices_are_scoped_and_independent(tmp_path, scenario):
         encoding="utf-8",
         errors="replace",
         capture_output=True,
-        timeout=20,
+        # One PowerShell process per scenario; cold starts on hosted Windows
+        # runners have exceeded 20 s.
+        timeout=90,
         check=False,
     )
     if scenario == "blocked_delete":

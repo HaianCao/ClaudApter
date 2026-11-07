@@ -54,9 +54,27 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 _OPENER = urllib.request.build_opener(_NoRedirect(), DeadlineHTTPHandler(), DeadlineHTTPSHandler())
 
 
+# Catalog documents are shallow. Python 3.14 parses far deeper JSON without
+# RecursionError, so bound nesting explicitly instead of relying on the parser.
+MAX_JSON_DEPTH = 64
+
+
+def _within_depth(value, limit=MAX_JSON_DEPTH):
+    pending = [(value, 1)]
+    while pending:
+        item, depth = pending.pop()
+        if isinstance(item, dict | list):
+            if depth > limit:
+                return False
+            pending.extend((child, depth + 1) for child in (item.values() if isinstance(item, dict) else item))
+    return True
+
+
 def _decode_json(raw):
     try:
         value = json.loads(raw)
+        if not _within_depth(value):
+            raise ValueError("catalog JSON nesting is too deep")
         json.dumps(value, ensure_ascii=False, allow_nan=False).encode("utf-8")
     except (ValueError, TypeError, RecursionError):
         raise ValueError("Invalid catalog JSON.") from None
