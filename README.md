@@ -75,11 +75,9 @@ reasoning settings** to request less reasoning compute where a model honours it.
 
 The launcher sets `CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK=1` for the session
 (unless you set it), so Claude Code does not switch a flagged request to a
-built-in Claude model the provider does not serve. Claude Code 2.1.319 and newer
-cannot use **auto mode** through third-party providers or the gateway: its
-safety review runs only on Anthropic's servers and there is no local fallback,
-so tool calls are asked or denied. Use the default or accept-edits permission
-modes. **Model limits** on a
+built-in Claude model the provider does not serve. **Auto mode** was checked live on
+Claude Code 2.1.319 through the gateway and runs tool calls; see the provider
+notes in Protoverta's `docs/compatibility/providers.md`. **Model limits** on a
 provider set Claude Code's assumed context window and maximum output tokens
 (`CLAUDE_CODE_MAX_CONTEXT_TOKENS`, `CLAUDE_CODE_MAX_OUTPUT_TOKENS`) for the
 session; set them to the provider model's real limits.
