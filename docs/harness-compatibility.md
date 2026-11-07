@@ -34,7 +34,7 @@ remain outside the wrapper's enforcement. Family aliases are not accepted as
 exact IDs in these policies, preventing self-referencing alias definitions.
 
 Non-inherited policies and the session model picker are verified with Claude
-Code 2.1.308 and 2.1.318 (loopback client smoke). Newer 2.1.x releases keep the
+Code 2.1.308, 2.1.318 and 2.1.319 (loopback client smoke). Newer 2.1.x releases keep the
 same settings and print a warning, because Claude Code auto-updates. Unknown,
 older or other-series versions fail the explicit override at preflight; choose
 inherit to retain the existing harness behavior. Native routes query the version only when requesting

@@ -114,7 +114,7 @@ def test_require_schema_policy_for_claude_versions():
     for version in (None, (2, 1, 307), (2, 2, 0), (3, 0, 0)):
         with _pytest.raises(ValueError, match="2.1.308 or a newer 2.1.x"):
             _harness.require_schema(version, "Feature", ValueError)
-    for version in ((2, 1, 308), (2, 1, 318)):
+    for version in ((2, 1, 308), (2, 1, 318), (2, 1, 319)):
         with _warnings.catch_warnings():
             _warnings.simplefilter("error")
             assert _harness.require_schema(version, "Feature", ValueError) == version

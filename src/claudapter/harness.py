@@ -56,7 +56,7 @@ def _probe(prefix: tuple[str, ...], identity: tuple) -> tuple[int, int, int] | N
 # Releases exercised end to end with the launcher (loopback client smoke, tool
 # loops, model picker). Claude Code auto-updates, so newer 2.1.x releases keep
 # the same settings with a visible warning instead of a hard failure.
-VERIFIED_VERSIONS = frozenset({(2, 1, 308), (2, 1, 318)})
+VERIFIED_VERSIONS = frozenset({(2, 1, 308), (2, 1, 318), (2, 1, 319)})
 MINIMUM_SCHEMA_VERSION = (2, 1, 308)
 
 
