@@ -37,24 +37,3 @@ def test_launch_sets_limits_and_disables_refusal_model_fallback_unless_user_chos
     monkeypatch.setenv("CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK", "0")
     _, env = launcher.build_invocation(config, provider, "vendor/model", "default", [])
     assert env["CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK"] == "0"
-
-
-@pytest.mark.parametrize(
-    ("base_url", "mode", "expected"),
-    [
-        ("https://openrouter.example/api", "direct", "0"),
-        ("https://api.anthropic.com", "direct", None),
-        ("https://api.anthropic.com", "gateway", "0"),
-    ],
-)
-def test_auto_mode_keeps_its_classifier_behind_non_anthropic_endpoints(monkeypatch, base_url, mode, expected):
-    monkeypatch.setattr(launcher.shutil, "which", lambda _: "claude.exe")
-    monkeypatch.setattr(launcher, "get_token", lambda *_: "synthetic")
-    monkeypatch.delenv("CLAUDE_CODE_AUTO_MODE_SERVER", raising=False)
-    provider = Provider("demo", "Demo", base_url, execution_mode=mode)
-    options = {"gateway_url": "http://127.0.0.1:9", "gateway_token": "local"} if mode == "gateway" else {}
-    _, env = launcher.build_invocation(Config({"demo": provider}), provider, "vendor/model", "default", [], **options)
-    assert env.get("CLAUDE_CODE_AUTO_MODE_SERVER") == expected
-    monkeypatch.setenv("CLAUDE_CODE_AUTO_MODE_SERVER", "1")
-    _, env = launcher.build_invocation(Config({"demo": provider}), provider, "vendor/model", "default", [], **options)
-    assert env["CLAUDE_CODE_AUTO_MODE_SERVER"] == "1"

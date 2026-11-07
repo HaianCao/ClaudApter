@@ -5,7 +5,6 @@ import os
 import secrets
 import shutil
 import subprocess
-import urllib.parse
 from pathlib import Path
 
 from .agent_models import agent_environment
@@ -32,11 +31,6 @@ def _bypass_loopback_proxy(env: dict[str, str]) -> None:
     entries.extend(("127.0.0.1", "localhost", "::1"))
     merged = ",".join({value.casefold(): value for value in entries}.values())
     env.update(NO_PROXY=merged, no_proxy=merged)
-
-
-def _anthropic_endpoint(base_url: str) -> bool:
-    host = (urllib.parse.urlsplit(base_url).hostname or "").lower()
-    return host == "anthropic.com" or host.endswith(".anthropic.com")
 
 
 def build_invocation(
@@ -110,12 +104,6 @@ def build_invocation(
     # is flagged; provider/gateway model IDs have no such fallback. An explicit
     # user value is respected.
     env.setdefault("CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK", "1")
-    # Claude Code 2.1.319+: behind a non-Anthropic endpoint the auto-mode
-    # server review cannot run, and auto mode then asks or denies every call
-    # instead of using its built-in classifier. Keep the classifier unless the
-    # endpoint is Anthropic's own or the user chose.
-    if provider.execution_mode == "gateway" or not _anthropic_endpoint(provider.base_url):
-        env.setdefault("CLAUDE_CODE_AUTO_MODE_SERVER", "0")
     env.update(model_limit_environment(provider.model_limits))
     args = [*prefix, "--model", model]
     managed_agents = agent_environment(prefix, provider.agent_models, model)
