@@ -7,8 +7,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.25'
           cache: false
@@ -23,11 +23,11 @@ jobs:
         python-version: ['3.11', '3.13']
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
       - name: Install the pinned gateway wheel
@@ -58,7 +58,7 @@ jobs:
       - name: Direct-only test evidence permits optional gateway skips
         if: ${{ !matrix.gateway }}
         run: python scripts/check_test_report.py test-results.xml --allow-skips
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: claude-tests-${{ matrix.python-version }}-gateway-${{ matrix.gateway }}
