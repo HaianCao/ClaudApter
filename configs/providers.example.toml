@@ -6,6 +6,12 @@ provider = "example"
 model = "claude-model-id"
 effort = "default"
 
+[retry]
+enabled = true
+max_retries = 10
+delay_seconds = 60
+skip_status = [401, 403]
+
 [[providers]]
 id = "example"
 display_name = "Example Gateway"

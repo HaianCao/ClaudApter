@@ -22,12 +22,23 @@ class Provider:
 
 
 @dataclass
+class Retry:
+    """Provider errors are retried by the local relay before Claude Code sees them."""
+
+    enabled: bool = True
+    max_retries: int = 10
+    delay_seconds: int = 60
+    skip_status: tuple[int, ...] = (401, 403)
+
+
+@dataclass
 class Config:
     providers: dict[str, Provider] = field(default_factory=dict)
     default_provider: str = ""
     default_model: str = ""
     default_effort: str = "default"
     path: Path | None = None
+    retry: Retry = field(default_factory=Retry)
 
 
 EFFORTS = {"default", "low", "medium", "high", "xhigh", "max"}
@@ -82,6 +93,29 @@ def claude_base_url(value: str) -> str:
     return value[:-3] if urlsplit(value).path.endswith("/v1") else value
 
 
+def _bounded_integer(value: object, name: str, low: int, high: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
+        raise ClaudapterError(f"{name} must be an integer from {low} to {high}.")
+    return value
+
+
+def load_retry(raw: object) -> Retry:
+    if not isinstance(raw, dict):
+        raise ClaudapterError("[retry] must be a TOML table.")
+    enabled = raw.get("enabled", True)
+    if not isinstance(enabled, bool):
+        raise ClaudapterError("retry.enabled must be true or false.")
+    statuses = raw.get("skip_status", list(Retry.skip_status))
+    if not isinstance(statuses, list):
+        raise ClaudapterError("retry.skip_status must be a list of HTTP status codes.")
+    return Retry(
+        enabled,
+        _bounded_integer(raw.get("max_retries", 10), "retry.max_retries", 0, 100),
+        _bounded_integer(raw.get("delay_seconds", 60), "retry.delay_seconds", 0, 3600),
+        tuple(_bounded_integer(status, "retry.skip_status", 400, 599) for status in statuses),
+    )
+
+
 def validate(config: Config) -> None:
     if config.default_effort not in EFFORTS:
         raise ClaudapterError("Invalid effort level.")
@@ -116,7 +150,7 @@ def load(path: Path | None = None) -> Config:
             if provider.id in providers:
                 raise ClaudapterError(f"Duplicate provider: {provider.id}")
             providers[provider.id] = provider
-        config = Config(providers, defaults.get("provider", ""), defaults.get("model", ""), defaults.get("effort", "default"), path)
+        config = Config(providers, defaults.get("provider", ""), defaults.get("model", ""), defaults.get("effort", "default"), path, load_retry(raw.get("retry", {})))
         validate(config)
         return config
     except (OSError, UnicodeError, tomllib.TOMLDecodeError, TypeError, KeyError, ValueError) as exc:
@@ -127,6 +161,8 @@ def save(config: Config) -> None:
     validate(config)
     path = config.path or config_path()
     lines = ["schema_version = 1", "", "[defaults]", f"provider = {json.dumps(config.default_provider)}", f"model = {json.dumps(config.default_model)}", f"effort = {json.dumps(config.default_effort)}"]
+    retry = config.retry
+    lines += ["", "[retry]", f"enabled = {str(retry.enabled).lower()}", f"max_retries = {retry.max_retries}", f"delay_seconds = {retry.delay_seconds}", f"skip_status = [{', '.join(str(status) for status in retry.skip_status)}]"]
     for provider in config.providers.values():
         lines += ["", "[[providers]]"]
         for name in ("id", "display_name", "base_url", "auth_mode", "default_model"):
