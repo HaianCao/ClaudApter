@@ -76,6 +76,22 @@ claude-ca --help
 
 After installation, `claude-ca` is available from any working directory. Re-run the installer command to update ClaudApter; your provider settings and API keys are retained.
 
+## Automatic retry on provider errors
+
+Some providers fail a request for a while and then work again. Claude Code itself retries only timeouts, rate limits, server errors and dropped connections, a few seconds apart; other errors end the turn with a red `API Error`. ClaudApter starts a small relay on `127.0.0.1` for each session. When the provider answers with an error, cannot be reached, or fails a stream before any content, the relay waits and sends the same request again, so Claude Code shows the error only after the last attempt. Content that already reached Claude Code is never repeated. While the relay waits, Claude Code shows the turn as still working; press Esc to cancel, which also stops the retries.
+
+Defaults: up to **10 retries, 60 seconds apart**; `401` and `403` (key problems) are not retried. Change them in `%APPDATA%\claudapter\config.toml`:
+
+```toml
+[retry]
+enabled = true        # false: Claude Code talks to the provider directly
+max_retries = 10      # 0-100
+delay_seconds = 60    # 0-3600
+skip_status = [401, 403]
+```
+
+When the retries run out, the error is marked final so Claude Code does not retry it again. Claude Code answers an HTTP 400 by resending the request at once with fewer features enabled; for 30 seconds after the relay gives up, those follow-ups are passed through without waiting. Sessions also set `API_TIMEOUT_MS` (unless you set it) to cover the whole retry time, up to Claude Code's 30-minute limit. Each retry is logged with the provider's error message in `%LOCALAPPDATA%\claudapter\retry.log`.
+
 ## Uninstall
 
 In PowerShell, run the uninstaller directly from GitHub:
@@ -90,7 +106,7 @@ Environment reset clears only `CLAUDE_CA_CONFIG`, `CLAUDE_CA_CACHE` and `CLAUDE_
 
 ## Privacy and security
 
-Provider settings and API keys are stored on your computer. API keys are kept in a local `.env` file in plain text, so protect the file and never commit or share it. The setup page listens only on your own computer (`127.0.0.1`) and uses a per-session access token. ClaudApter is a local launcher; it does not host a service or proxy your conversations.
+Provider settings and API keys are stored on your computer. API keys are kept in a local `.env` file in plain text, so protect the file and never commit or share it. The setup page listens only on your own computer (`127.0.0.1`) and uses a per-session access token. ClaudApter is a local launcher; it does not host a service. The retry relay listens only on `127.0.0.1`, forwards requests to the configured provider only, adds no credentials and stores no conversation content; its log keeps only request paths and provider error messages.
 
 ClaudApter does not edit Claude Code's own settings or session transcripts. The `doctor` command sends a small real `/v1/messages` request and may incur an API charge; it does not verify streaming or tool calls. Resuming with a different provider/model can be attempted, but equivalent reasoning state or tool behavior is not guaranteed.
 
