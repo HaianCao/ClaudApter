@@ -1,6 +1,7 @@
 param([switch]$SkipClaudeInstall, [switch]$NonInteractive, [switch]$WithGateway, [string]$ProtovertaWheel, [switch]$NoPathChanges, [string]$SourceBranch = 'main')
 $ErrorActionPreference = 'Stop'
 $sourceTempRoot = $null
+$wheelTempRoot = $null
 $installLock = $null
 
 function Write-Step([string]$Message) {
@@ -112,29 +113,21 @@ try {
     if ($isUpdate) { Write-Step 'Updating ClaudApter' }
     else { Write-Step 'Installing ClaudApter' }
     $installTarget = $repoRoot
-    $gatewayPackages = @()
-    if ($previousPython -and -not $WithGateway -and -not $ProtovertaWheel) {
-        $hasGateway = & $previousPython -I -c "import importlib.util; print(int(importlib.util.find_spec('protoverta') is not None))"
-        if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the existing gateway installation.' }
-        if (([string]$hasGateway).Trim() -eq '1') { $WithGateway = $true }
-    }
+    # The local Protoverta gateway is part of every install. -WithGateway is
+    # still accepted from older commands and changes nothing.
+    $protovertaVersion = '0.3.0rc1'
+    $protovertaSha256 = 'PENDING-RELEASE'
     if ($ProtovertaWheel) {
         if (-not (Test-Path -LiteralPath $ProtovertaWheel -PathType Leaf) -or [IO.Path]::GetExtension($ProtovertaWheel) -ne '.whl') {
             throw 'ProtovertaWheel must point to a local Protoverta wheel file.'
         }
-        $gatewayPackages += (Resolve-Path -LiteralPath $ProtovertaWheel).Path
-        $WithGateway = $true
+        $gatewayPackages = @((Resolve-Path -LiteralPath $ProtovertaWheel).Path)
     }
-    if ($WithGateway) {
-        if (-not [regex]::IsMatch((Get-Content -LiteralPath (Join-Path $repoRoot 'pyproject.toml') -Raw), '(?m)^gateway\s*=')) {
-            throw 'Selected source has no gateway extra. For the preview use -SourceBranch integration/protoverta.'
-        }
-        $installTarget = "${repoRoot}[gateway]"
-        if (-not $ProtovertaWheel) {
-            $protovertaAsset = 'https://github.com/HaianCao/Protoverta/releases/download/v0.3.0a11/protoverta-0.3.0a11-py3-none-any.whl'
-            Assert-AdapterReleaseAsset $protovertaAsset
-            $gatewayPackages += $protovertaAsset
-        }
+    else {
+        $wheelTempRoot = Join-Path ([IO.Path]::GetTempPath()) ("protoverta-wheel-{0}" -f [guid]::NewGuid())
+        New-Item -ItemType Directory -Path $wheelTempRoot | Out-Null
+        $protovertaAsset = "https://github.com/HaianCao/Protoverta/releases/download/v$protovertaVersion/protoverta-$protovertaVersion-py3-none-any.whl"
+        $gatewayPackages = @(Get-AdapterVerifiedWheel -Uri $protovertaAsset -Sha256 $protovertaSha256 -Directory $wheelTempRoot)
     }
     $candidate = New-AdapterEnvironment -Root $installRoot -Python $pythonExe -Target $installTarget -GatewayPackages $gatewayPackages -Module 'claudapter' -Command 'claude-ca'
 
@@ -174,6 +167,7 @@ catch {
 }
 finally {
     if ($installLock) { $installLock.Dispose() }
+    if ($wheelTempRoot -and (Test-Path -LiteralPath $wheelTempRoot)) { Remove-Item -LiteralPath $wheelTempRoot -Recurse -Force -ErrorAction SilentlyContinue }
     if ($sourceTempRoot) {
         $tempParent = [IO.Path]::GetFullPath((Split-Path -Parent $sourceTempRoot)).TrimEnd('\')
         $expectedParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')

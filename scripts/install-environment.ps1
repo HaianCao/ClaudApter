@@ -60,17 +60,28 @@ function Set-AdapterCurrentEnvironment([string]$Root, [string]$Id) {
     finally { if (Test-Path -LiteralPath $pending) { Remove-Item -LiteralPath $pending -Force } }
 }
 
-function Assert-AdapterReleaseAsset {
-    param([string]$Uri)
-    # Fail before creating a venv, with an actionable message, when the pinned
-    # Protoverta release asset is not published (or GitHub is unreachable).
+function Get-AdapterVerifiedWheel {
+    param([string]$Uri, [string]$Sha256, [string]$Directory)
+    # Download the pinned Protoverta wheel and refuse it unless its SHA-256
+    # matches the hash this installer was released with.
+    if ($Sha256 -notmatch '^[0-9a-f]{64}$') {
+        throw 'This installer has no pinned Protoverta hash (unreleased build). Pass -ProtovertaWheel PATH with a locally built wheel of the same version.'
+    }
+    $name = Split-Path -Leaf ([Uri]$Uri).AbsolutePath
+    if ($name -notmatch '^protoverta-[0-9A-Za-z.]+-py3-none-any\.whl$') { throw 'Unexpected Protoverta wheel name.' }
+    $path = Join-Path $Directory $name
     try {
-        $response = Invoke-WebRequest -UseBasicParsing -Method Head -Uri $Uri -MaximumRedirection 5 -TimeoutSec 30
-        if ($response.StatusCode -ne 200) { throw "HTTP $($response.StatusCode)" }
+        Invoke-WebRequest -UseBasicParsing -Uri $Uri -OutFile $path -MaximumRedirection 5 -TimeoutSec 180
     }
     catch {
-        throw "The pinned Protoverta gateway release asset is not available ($Uri): $($_.Exception.Message.TrimEnd('.')). Previous installation was preserved. Retry later, or pass -ProtovertaWheel PATH with a locally built wheel of the same version."
+        throw "The pinned Protoverta release asset could not be downloaded ($Uri): $($_.Exception.Message.TrimEnd('.')). Previous installation was preserved. Retry later, or pass -ProtovertaWheel PATH with a locally built wheel of the same version."
     }
+    $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actual -ne $Sha256) {
+        Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+        throw "The downloaded Protoverta wheel does not match its pinned SHA-256 (expected $Sha256, got $actual). Installation stopped; previous installation was preserved."
+    }
+    return $path
 }
 
 function New-AdapterEnvironment {
@@ -96,6 +107,7 @@ function New-AdapterEnvironment {
     & $candidatePython -I -m "${Module}.cli" --help | Out-Host
     if ($LASTEXITCODE -ne 0) { throw 'Candidate entry point check failed. Previous installation was preserved.' }
     if ($GatewayPackages.Count) {
+        # install.ps1 always passes the pinned Protoverta wheel.
         & $candidatePython -I -c 'import protoverta.server' | Out-Host
         if ($LASTEXITCODE -ne 0) { throw 'Candidate gateway check failed. Previous installation was preserved.' }
     }
