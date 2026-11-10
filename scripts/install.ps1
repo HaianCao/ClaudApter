@@ -159,7 +159,7 @@ try {
     Remove-UserPath (Join-Path $installRoot 'venv\Scripts')
     if ($isUpdate) { Write-Host 'ClaudApter update complete. Provider settings and API keys were preserved.' -ForegroundColor Green }
     else { Write-Host 'ClaudApter installation complete.' -ForegroundColor Green }
-    Write-Host 'Open a new CMD, PowerShell, or Windows Terminal tab and run: claude-ca setup'
+    Write-Host 'Open a new CMD, PowerShell, or Windows Terminal tab and run: claude-ca (setup opens the first time; claude-ca setup changes providers later)'
 }
 catch {
     Write-Host "`nSetup failed: $($_.Exception.Message)" -ForegroundColor Red
