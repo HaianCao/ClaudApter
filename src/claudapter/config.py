@@ -216,7 +216,8 @@ def validate(config: Config) -> None:
         raise ClaudapterError("Default provider does not exist.")
     if not isinstance(config.retry, dict):
         raise ClaudapterError("[retry] must be a TOML table.")
-    retry_policy(config)
+    if RetryPolicy is not None:  # Without the core, launching reports the repair step.
+        retry_policy(config)
 
 
 def load(path: Path | None = None) -> Config:
