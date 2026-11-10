@@ -13,9 +13,11 @@ from .config import (
     EFFORTS,
     Config,
     Provider,
+    cache_path,
     claude_base_url,
     config_path,
     model_limit_environment,
+    retry_policy,
     secret_var,
     validate_capability_settings,
     validate_model_limits,
@@ -61,6 +63,12 @@ def session_model_limits(config: Config, provider: Provider, model: str, token=N
     return limits
 
 
+def _retry_timeout_ms(policy) -> int:
+    """Claude Code's request timeout must outlast the retry waits (cap 30 min)."""
+    waits = min(policy.max_total_seconds, policy.max_retries * policy.delay_seconds * (1 + policy.jitter))
+    return int(min((waits + 600) * 1000, 1_800_000))
+
+
 def build_invocation(
     config: Config,
     provider: Provider,
@@ -71,6 +79,7 @@ def build_invocation(
     *,
     gateway_url: str | None = None,
     gateway_token: str | None = None,
+    relay_url: str | None = None,
 ) -> tuple[list[str], dict[str, str]]:
     validate_capability_settings(provider.capabilities_file, provider.require_verified_capabilities, provider.execution_mode)
     if provider.upstream_reasoning not in ("auto", "provider_default", "disabled", "openrouter_disabled") or (
@@ -126,8 +135,12 @@ def build_invocation(
         env["ANTHROPIC_AUTH_TOKEN"] = gateway_token
         _bypass_loopback_proxy(env)
     else:
-        env["ANTHROPIC_BASE_URL"] = claude_base_url(provider.base_url)
+        env["ANTHROPIC_BASE_URL"] = relay_url or claude_base_url(provider.base_url)
         env["ANTHROPIC_AUTH_TOKEN" if provider.auth_mode == "bearer" else "ANTHROPIC_API_KEY"] = token
+    policy = retry_policy(config)
+    if policy.enabled and policy.max_retries and (relay_url or provider.execution_mode == "gateway"):
+        # An explicit user value is respected.
+        env.setdefault("API_TIMEOUT_MS", str(_retry_timeout_ms(policy)))
     # Claude Code 2.1.312+ may switch to a built-in Claude model when a request
     # is flagged; provider/gateway model IDs have no such fallback. An explicit
     # user value is respected.
@@ -233,6 +246,11 @@ def _gateway(config: Config, provider: Provider, model: str | None = None):
             reasoning_policy, reasoning_output = _automatic_reasoning(upstream, base_url)
             if reasoning_output is not None:
                 options["reasoning_output"] = reasoning_output
+        policy = retry_policy(config)
+        if policy.enabled and policy.max_retries:
+            from .retry_log import RetryLog
+
+            options.update(retry_policy=policy, retry_log=RetryLog(cache_path(config).parent / "retry.log"))
         gateway = GatewayConfig(
             upstream,
             base_url,
@@ -303,7 +321,14 @@ def launch(config: Config, provider: Provider, model: str, effort: str, extra: l
             with session_options(config.path or config_path(), provider) as observer_options, gateway_session(gateway, **observer_options) as origin:
                 args, env = build_invocation(config, provider, model, effort, extra, mode, gateway_url=origin, gateway_token=gateway.inbound_token)
                 return run(args, env)
-        args, env = build_invocation(config, provider, model, effort, extra, mode)
-        return run(args, env)
+        policy = retry_policy(config)
+        if not policy.enabled or not policy.max_retries:
+            return run(*build_invocation(config, provider, model, effort, extra, mode))
+        from .retry_log import RetryLog
+        from .retry_relay import RetryRelay
+
+        log = RetryLog(cache_path(config).parent / "retry.log")
+        with RetryRelay(claude_base_url(provider.base_url), policy, "messages", log) as relay:
+            return run(*build_invocation(config, provider, model, effort, extra, mode, relay_url=relay.base_url))
     except OSError as exc:
         raise ClaudapterError(f"Could not start Claude Code: {exc}") from exc

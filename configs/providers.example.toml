@@ -6,6 +6,19 @@ provider = "example"
 model = "claude-model-id"
 effort = "default"
 
+# Optional. Retry failed provider requests by error class (all keys optional).
+# Gateway mode: Protoverta retries; direct mode: a local relay does.
+[retry]
+enabled = true
+max_retries = 10
+delay_seconds = 60
+jitter = 0.2
+max_total_seconds = 1800
+# Default retried classes: rate_limit, overloaded, server, network,
+# stream_interrupted, backend_mismatch, unknown. Add or remove classes:
+retry_classes = []
+no_retry_classes = []
+
 [[providers]]
 id = "example"
 display_name = "Example Gateway"

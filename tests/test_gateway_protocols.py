@@ -85,7 +85,10 @@ def test_gateway_passes_explicit_prefix_and_compatibility_policy(tmp_path, proto
     if protocol == "messages" and not expected.endswith("/v1"):
         expected += "/v1"
     assert captured["args"][1] == expected
-    assert captured["options"] == (
+    options = dict(captured["options"])
+    # Default [retry]: the gateway retries by error class and logs decisions.
+    assert options.pop("retry_policy").enabled and callable(options.pop("retry_log"))
+    assert options == (
         {"upstream_reasoning": "provider_default"}
         if protocol == "messages"
         else {"client_profile": "claude", "messages_usage_policy": "deferred", "upstream_reasoning": "provider_default"}

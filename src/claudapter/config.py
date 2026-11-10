@@ -8,6 +8,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
+try:
+    from protoverta.error_classes import RetryPolicy
+except ImportError:  # A broken install must still open the setup page.
+    RetryPolicy = None  # type: ignore[assignment,misc]
+
 from .errors import ClaudapterError
 from .toml_text import toml_value
 
@@ -60,6 +65,18 @@ class Config:
     default_model: str = ""
     default_effort: str = "default"
     path: Path | None = None
+    # The [retry] table as written; see retry_policy(). Empty means defaults.
+    retry: dict = field(default_factory=dict)
+
+
+def retry_policy(config: Config):
+    """The session's error-class retry policy (Protoverta ``RetryPolicy``)."""
+    if RetryPolicy is None:
+        raise ClaudapterError("ClaudApter's Protoverta component is missing or broken. Run the installer command again to repair it.")
+    try:
+        return RetryPolicy.from_mapping(config.retry)
+    except ValueError as exc:
+        raise ClaudapterError(f"Invalid [retry] settings: {exc}") from None
 
 
 EFFORTS = {"default", "low", "medium", "high", "xhigh", "max"}
@@ -197,6 +214,9 @@ def validate(config: Config) -> None:
         used_secret_names.add(name)
     if config.default_provider and config.default_provider not in config.providers:
         raise ClaudapterError("Default provider does not exist.")
+    if not isinstance(config.retry, dict):
+        raise ClaudapterError("[retry] must be a TOML table.")
+    retry_policy(config)
 
 
 def load(path: Path | None = None) -> Config:
@@ -222,7 +242,10 @@ def load(path: Path | None = None) -> Config:
             if provider.id in providers:
                 raise ClaudapterError(f"Duplicate provider: {provider.id}")
             providers[provider.id] = provider
-        config = Config(providers, defaults.get("provider", ""), defaults.get("model", ""), defaults.get("effort", "default"), path)
+        retry = raw.get("retry", {})
+        if not isinstance(retry, dict):
+            raise ClaudapterError("[retry] must be a TOML table.")
+        config = Config(providers, defaults.get("provider", ""), defaults.get("model", ""), defaults.get("effort", "default"), path, retry)
         validate(config)
         return config
     except (OSError, UnicodeError, tomllib.TOMLDecodeError, TypeError, KeyError, ValueError) as exc:
@@ -240,6 +263,9 @@ def save(config: Config) -> None:
         f"model = {toml_value(config.default_model, ensure_ascii=True)}",
         f"effort = {toml_value(config.default_effort, ensure_ascii=True)}",
     ]
+    if config.retry:
+        # Written as the user set it (0.1.x wrote this table too).
+        lines += ["", "[retry]"] + [f"{key} = {toml_value(config.retry[key])}" for key in sorted(config.retry)]
     for provider in config.providers.values():
         lines += ["", "[[providers]]"]
         for name in ("id", "display_name", "base_url", "auth_mode", "default_model", "execution_mode", "protocol", "upstream_reasoning"):

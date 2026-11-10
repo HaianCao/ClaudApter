@@ -76,6 +76,7 @@ class LauncherTests(unittest.TestCase):
             class GatewayConfig:
                 def __init__(self, upstream, base_url, key, inbound_token, auth_style, **policy):
                     assert policy.pop("model_snapshot") == (base_url, upstream, (("claude-demo", "claude-demo"),))
+                    assert policy.pop("retry_policy").enabled and callable(policy.pop("retry_log"))
                     assert policy == {"upstream_reasoning": "provider_default"}
                     self.inbound_token = inbound_token
                     events.append((upstream, base_url, key, auth_style))

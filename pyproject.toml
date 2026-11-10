@@ -4,12 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "claudapter"
-version = "0.2.0a2"
+version = "0.2.0rc1"
 description = "A local provider setup studio and launcher for Claude Code"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
-dependencies = []
+# The local gateway is part of every install (direct mode stays available).
+dependencies = ["protoverta==0.3.0rc1"]
 authors = [{ name = "HaianCao", email = "caohaian2005@gmail.com" }]
 keywords = ["claude-code", "claude", "anthropic", "llm", "launcher", "openrouter", "gateway"]
 classifiers = [
@@ -35,7 +36,8 @@ Changelog = "https://github.com/HaianCao/ClaudApter/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
-gateway = ["protoverta==0.3.0a11"]
+# Kept so older install commands that request the extra keep working.
+gateway = []
 
 [project.scripts]
 claude-ca = "claudapter.cli:main"
