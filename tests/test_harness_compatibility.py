@@ -71,7 +71,7 @@ def test_invalid_version_is_unknown(tmp_path, mode):
 @pytest.mark.parametrize("error", [OSError("synthetic-private"), subprocess.TimeoutExpired("private", 3)])
 def test_failed_or_timed_out_probe_returns_unknown(monkeypatch, error):
     def fail(*args, **kwargs):
-        assert kwargs["timeout"] == 3
+        assert kwargs["timeout"] == harness.VERSION_PROBE_SECONDS
         raise error
 
     monkeypatch.setattr(harness.subprocess, "run", fail)

@@ -76,7 +76,7 @@ function Assert-AdapterReleaseAsset {
 function New-AdapterEnvironment {
     param([string]$Root, [string]$Python, [string]$Target, [string[]]$GatewayPackages,
           [string]$Module, [string]$Command)
-    if ($Module -notin @('codex_adapter', 'claudapter') -or $Command -notin @('codex-ca', 'claude-ca')) {
+    if ($Module -notin @('codexapter', 'claudapter') -or $Command -notin @('codex-ca', 'claude-ca')) {
         throw 'Unknown adapter entry point.'
     }
     $id = [guid]::NewGuid().ToString('N')
