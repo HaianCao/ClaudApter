@@ -10,6 +10,9 @@ import warnings
 from functools import lru_cache
 from pathlib import Path
 
+# A cold native CLI start (a large executable scanned by antivirus on first
+# run) can take several seconds; 3 s silently disabled version-gated features.
+VERSION_PROBE_SECONDS = 15
 _ESSENTIAL = {"PATH", "PATHEXT", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "TEMP", "TMP"}
 
 
@@ -45,7 +48,14 @@ def _probe(prefix: tuple[str, ...], identity: tuple) -> tuple[int, int, int] | N
             env.update(DISABLE_AUTOUPDATER="1", CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1")
             with (root / "version").open("w+b") as output:
                 result = subprocess.run(
-                    [*prefix, "--version"], env=env, cwd=root, stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.DEVNULL, timeout=3, check=False
+                    [*prefix, "--version"],
+                    env=env,
+                    cwd=root,
+                    stdin=subprocess.DEVNULL,
+                    stdout=output,
+                    stderr=subprocess.DEVNULL,
+                    timeout=VERSION_PROBE_SECONDS,
+                    check=False,
                 )
                 output.seek(0)
                 return parse_version(output.read(257)) if result.returncode == 0 else None

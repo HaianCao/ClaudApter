@@ -5,6 +5,7 @@ import os
 import secrets
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from .agent_models import agent_environment
@@ -61,6 +62,36 @@ def session_model_limits(config: Config, provider: Provider, model: str, token=N
     except ClaudapterError:
         return manual
     return limits
+
+
+# Global model choices Claude Code reads for background tasks and subagents.
+GLOBAL_MODEL_VARIABLES = (
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL",
+    "ANTHROPIC_SMALL_FAST_MODEL",
+    "CLAUDE_CODE_SUBAGENT_MODEL",
+)
+
+
+def model_override_notice(provider: Provider, environ=None) -> str | None:
+    """Explain inherited global model variables instead of silently dropping them.
+
+    With the inherit agent policy ClaudApter leaves these user settings alone;
+    they may name models another provider serves.
+    """
+    environ = os.environ if environ is None else environ
+    if provider.agent_models.get("policy", "inherit") != "inherit":
+        return None
+    names = [name for name in GLOBAL_MODEL_VARIABLES if environ.get(name)]
+    if not names:
+        return None
+    return (
+        f"Note: {', '.join(names)} {'is' if len(names) == 1 else 'are'} set in your environment, so Claude Code uses "
+        f"{'it' if len(names) == 1 else 'them'} for background tasks and subagents on {provider.display_name}. "
+        "If those models are not available there, unset them or choose agent models in claude-ca setup."
+    )
 
 
 def _retry_timeout_ms(policy) -> int:
@@ -314,6 +345,9 @@ def launch(config: Config, provider: Provider, model: str, effort: str, extra: l
         except ValueError as exc:
             raise ClaudapterError(str(exc)) from None
 
+    notice = model_override_notice(provider)
+    if notice:
+        print(notice, file=sys.stderr)
     try:
         if provider.execution_mode == "gateway":
             gateway, gateway_session = _gateway(config, provider, model)

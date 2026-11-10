@@ -112,3 +112,14 @@ class LauncherTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_global_model_variables_are_explained_not_dropped():
+    from claudapter.launcher import model_override_notice
+
+    provider = Provider("demo", "Demo", "https://gateway.test")
+    assert model_override_notice(provider, {}) is None
+    notice = model_override_notice(provider, {"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku", "CLAUDE_CODE_SUBAGENT_MODEL": "x"})
+    assert "ANTHROPIC_DEFAULT_HAIKU_MODEL, CLAUDE_CODE_SUBAGENT_MODEL are set" in notice and "Demo" in notice
+    custom = Provider("demo", "Demo", "https://gateway.test", agent_models={"policy": "selected"})
+    assert model_override_notice(custom, {"ANTHROPIC_DEFAULT_HAIKU_MODEL": "x"}) is None
