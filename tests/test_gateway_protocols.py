@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import types
@@ -36,6 +37,19 @@ def test_cross_protocol_launcher_settings_are_child_only(tmp_path):
         assert env["MAX_THINKING_TOKENS"] == "0"
         assert env["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"] == "1"
         assert "--settings" in args
+        settings = json.loads(args[args.index("--settings") + 1])
+        # Claude Code's own default effort ("xhigh") is capped for translated routes.
+        assert settings["maxEffortLevel"] == "high" and settings["alwaysThinkingEnabled"] is False
+        native_args, _ = build_invocation(
+            config,
+            Provider("native", "Native", "https://example.test/v1", execution_mode="gateway", protocol="messages"),
+            "m",
+            "default",
+            [],
+            gateway_url="http://127.0.0.1:8765",
+            gateway_token="local",
+        )
+        assert "maxEffortLevel" not in " ".join(native_args)
         with pytest.raises(ClaudapterError, match="effort"):
             build_invocation(config, provider, "m", "max", [], gateway_url="http://127.0.0.1:8765", gateway_token="local")
 

@@ -36,6 +36,12 @@ Release candidate that merges the gateway preview into `main`.
   `ANTHROPIC_SMALL_FAST_MODEL` and `CLAUDE_CODE_SUBAGENT_MODEL` values are kept and
   a notice explains that background tasks and subagents use them.
 
+### Fixed
+- Chat Completions and Responses providers failed with "only low, medium, and
+  high effort are portable": with the effort left at *Model default*, Claude
+  Code 2.1.319 sends `xhigh`. Translated sessions now set Claude Code's
+  `maxEffortLevel` to `high`, which Claude Code applies to every effort source.
+
 ### Security
 - The setup page cannot be framed (`frame-ancestors 'none'`, `X-Frame-Options: DENY`).
 

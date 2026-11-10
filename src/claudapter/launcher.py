@@ -198,6 +198,10 @@ def build_invocation(
     if cross_protocol:
         # Scope compatibility settings to this child process, never user files.
         env.update(cross_protocol_environment(prefix))
+        # Translated routes carry low/medium/high only; Claude Code 2.1.319
+        # otherwise sends its own default "xhigh". Claude Code clamps every
+        # effort source (default, /effort, --effort) to this cap itself.
+        settings["maxEffortLevel"] = "high"
     if cross_protocol or provider.upstream_reasoning not in ("auto", "provider_default"):
         env.update({"MAX_THINKING_TOKENS": "0", "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING": "1"})
         settings["alwaysThinkingEnabled"] = False
