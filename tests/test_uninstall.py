@@ -2,6 +2,7 @@
 
 Never write the user's registry/PATH or run a real wrapper uninstallation.
 """
+
 import json
 import os
 import subprocess
@@ -23,7 +24,7 @@ $definitions = $ast.FindAll({param($node) $node -is [Management.Automation.Langu
 foreach ($definition in $definitions) { . ([scriptblock]::Create($definition.Extent.Text)) }
 $fake = @{}
 $writes = [Collections.Generic.List[object]]::new()
-$names = @(($env:HOTFIX_PREFIX + '_CONFIG'), ($env:HOTFIX_PREFIX + '_CACHE'), ($env:HOTFIX_PREFIX + '_ENV_FILE'))
+$names = @(($env:HOTFIX_PREFIX + '_CONFIG'), ($env:HOTFIX_PREFIX + '_CACHE'), ($env:HOTFIX_PREFIX + '_ENV_FILE'), ($env:HOTFIX_PREFIX + '_MCP_CONFIG'))
 foreach ($name in $names) {
     $fake["User|$name"] = 'fixture-override'
     $fake["Process|$name"] = 'fixture-override'
@@ -37,8 +38,10 @@ $wrapper = Join-Path $install 'venv\Scripts'
 $config = Join-Path $env:APPDATA $env:HOTFIX_DATA
 $cache = Join-Path $env:LOCALAPPDATA $env:HOTFIX_DATA
 New-Item -ItemType Directory -Path $wrapper, $config, $cache -Force | Out-Null
-$fake['User|Path'] = '"' + $wrapper + '";C:\Keep'
-$fake['Process|Path'] = $wrapper.ToUpperInvariant() + '\;C:\ProcessKeep'
+$bin = Join-Path $install 'bin'
+New-Item -ItemType Directory -Path $bin -Force | Out-Null
+$fake['User|Path'] = '"' + $wrapper + '";' + $bin + ';C:\Keep'
+$fake['Process|Path'] = $wrapper.ToUpperInvariant() + '\;' + $bin.ToUpperInvariant() + '\;C:\ProcessKeep'
 $fake['Machine|Path'] = $wrapper
 if ($env:HOTFIX_SCENARIO -eq 'no_matches') {
     $fake['User|Path'] = 'C:\Keep'
@@ -90,17 +93,36 @@ Write-Output ('RESULT:' + ($result | ConvertTo-Json -Depth 4 -Compress))
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows uninstaller")
-@pytest.mark.parametrize("scenario", ["keep", "reset", "no_path", "no_matches", "interactive_keep", "interactive_reset", "interactive_delete", "cancel", "blocked_delete"])
+@pytest.mark.parametrize(
+    "scenario", ["keep", "reset", "no_path", "no_matches", "interactive_keep", "interactive_reset", "interactive_delete", "cancel", "blocked_delete"]
+)
 def test_uninstall_choices_are_scoped_and_independent(tmp_path, scenario):
     script = Path(__file__).resolve().parents[1] / "scripts" / "uninstall.ps1"
     custom = tmp_path / "custom" / ".env"
     custom.parent.mkdir()
     custom.write_text("SYNTHETIC=fixture\n", encoding="utf-8")
-    env = dict(os.environ, APPDATA=str(tmp_path / "roaming"), LOCALAPPDATA=str(tmp_path / "local"),
-               USERPROFILE=str(tmp_path / "profile"), HOTFIX_SCRIPT=str(script), HOTFIX_PREFIX=PREFIX,
-               HOTFIX_INSTALL=INSTALL, HOTFIX_DATA=DATA, HOTFIX_SCENARIO=scenario)
-    result = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", HARNESS],
-                            env=env, encoding="utf-8", errors="replace", capture_output=True, timeout=20, check=False)
+    env = dict(
+        os.environ,
+        APPDATA=str(tmp_path / "roaming"),
+        LOCALAPPDATA=str(tmp_path / "local"),
+        USERPROFILE=str(tmp_path / "profile"),
+        HOTFIX_SCRIPT=str(script),
+        HOTFIX_PREFIX=PREFIX,
+        HOTFIX_INSTALL=INSTALL,
+        HOTFIX_DATA=DATA,
+        HOTFIX_SCENARIO=scenario,
+    )
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", HARNESS],
+        env=env,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        # One PowerShell process per scenario; cold starts on hosted Windows
+        # runners have exceeded 20 s.
+        timeout=90,
+        check=False,
+    )
     if scenario == "blocked_delete":
         assert result.returncode == 1
         assert "requires an interactive DELETE confirmation" in result.stdout
@@ -118,11 +140,13 @@ def test_uninstall_choices_are_scoped_and_independent(tmp_path, scenario):
         else:
             assert report["user_path"] == r"C:\Keep"
             assert report["process_path"] == r"C:\ProcessKeep"
-        assert all(write["Scope"] != "Machine" and write["Name"] in {"Path", PREFIX + "_CONFIG", PREFIX + "_CACHE", PREFIX + "_ENV_FILE"} for write in report["writes"])
+        assert all(
+            write["Scope"] != "Machine" and write["Name"] in {"Path", PREFIX + "_CONFIG", PREFIX + "_CACHE", PREFIX + "_ENV_FILE", PREFIX + "_MCP_CONFIG"}
+            for write in report["writes"]
+        )
         if scenario == "no_matches":
             assert not report["writes"]
             assert "No adapter wrapper entries were found" in result.stdout
         if scenario not in {"no_path", "cancel"}:
             assert "machine PATH" in result.stdout
     assert custom.read_text(encoding="utf-8") == "SYNTHETIC=fixture\n"
-

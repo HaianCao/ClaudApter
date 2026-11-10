@@ -1,11 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Tool caches and reports
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+docs/_build/
+
+# Secrets, logs and local tool settings
 .env
 .env.*
 !.env.example
+*.log
+.claude/
+
+# Local config written next to a source checkout
 /config.toml
 /models-cache.json
-__pycache__/
-.pytest_cache/
-.venv/
-build/
-dist/
-*.egg-info/

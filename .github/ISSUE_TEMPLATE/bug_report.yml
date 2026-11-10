@@ -1,0 +1,41 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Remove API keys, tokens and private prompts from everything you paste.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: ClaudApter version
+      placeholder: "e.g. 0.3.0a11, or the branch and commit"
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: Provider, model and protocol
+      placeholder: "e.g. OpenRouter, stealth/crouton-alpha, chat"
+  - type: input
+    id: client
+    attributes:
+      label: Client and version
+      placeholder: "e.g. Claude Code 2.1.319, Codex CLI 0.167.0"
+  - type: input
+    id: environment
+    attributes:
+      label: OS and Python version
+      placeholder: "e.g. Windows 11, Python 3.13"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error output
+      render: text

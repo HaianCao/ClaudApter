@@ -81,6 +81,7 @@ function Invoke-AdapterUninstall {
     foreach ($installName in $InstallNames) {
         $target = Join-Path $programsRoot $installName
         $pathTargets += Join-Path $target 'venv\Scripts'
+        $pathTargets += Join-Path $target 'bin'
         if (Remove-AdapterDirectory $target $programsRoot $installName) { $removed = $true }
     }
     if ($removed) { Write-Host "Removed $Name program files." }
@@ -147,7 +148,7 @@ function Invoke-AdapterUninstall {
 }
 
 try {
-    Invoke-AdapterUninstall -Name 'ClaudApter' -InstallNames @('claudapter') -DataNames @('claudapter') -EnvironmentNames @('CLAUDE_CA_CONFIG', 'CLAUDE_CA_CACHE', 'CLAUDE_CA_ENV_FILE') -PipxNames @('claudapter') -DeleteData:$DeleteData -ResetEnvironment:$ResetEnvironment -NonInteractive:$NonInteractive -NoPathChanges:$NoPathChanges
+    Invoke-AdapterUninstall -Name 'ClaudApter' -InstallNames @('claudapter') -DataNames @('claudapter') -EnvironmentNames @('CLAUDE_CA_CONFIG', 'CLAUDE_CA_CACHE', 'CLAUDE_CA_ENV_FILE', 'CLAUDE_CA_MCP_CONFIG') -PipxNames @('claudapter') -DeleteData:$DeleteData -ResetEnvironment:$ResetEnvironment -NonInteractive:$NonInteractive -NoPathChanges:$NoPathChanges
 }
 catch {
     Write-Host ("Uninstall failed: " + $_.Exception.Message) -ForegroundColor Red

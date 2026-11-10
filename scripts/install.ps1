@@ -1,6 +1,9 @@
-param([switch]$SkipClaudeInstall, [switch]$NonInteractive, [switch]$NoPathChanges)
+param([switch]$SkipClaudeInstall, [switch]$NonInteractive, [switch]$WithGateway, [string]$ProtovertaWheel, [switch]$NoPathChanges, [string]$SourceBranch = 'main')
+$adapterVersion = '0.2.0'
 $ErrorActionPreference = 'Stop'
 $sourceTempRoot = $null
+$wheelTempRoot = $null
+$installLock = $null
 
 function Write-Step([string]$Message) {
     Write-Host "`n==> $Message" -ForegroundColor Cyan
@@ -48,9 +51,23 @@ function Add-UserPath([string]$Directory) {
     }
 }
 
+function Remove-UserPath([string]$Directory) {
+    if ($NoPathChanges) { return }
+    $current = [Environment]::GetEnvironmentVariable('Path', 'User')
+    $entries = @($current -split ';' | Where-Object { $_ })
+    $kept = @($entries | Where-Object { $_.TrimEnd('\') -ine $Directory.TrimEnd('\') })
+    if ($kept.Count -ne $entries.Count) {
+        [Environment]::SetEnvironmentVariable('Path', ($kept -join ';'), 'User')
+    }
+    $env:Path = (@($env:Path -split ';' | Where-Object { $_ -and $_.TrimEnd('\') -ine $Directory.TrimEnd('\') }) -join ';')
+}
+
 try {
+    if ($SourceBranch -notmatch '^[A-Za-z0-9][A-Za-z0-9._/-]*$' -or $SourceBranch.Contains('..')) {
+        throw 'SourceBranch must be a valid Git branch name.'
+    }
     $repoRoot = $null
-    if ($PSScriptRoot) {
+    if ($PSScriptRoot -and -not $PSBoundParameters.ContainsKey('SourceBranch')) {
         $candidate = Split-Path -Parent $PSScriptRoot
         if (Test-ClaudApterSource $candidate) { $repoRoot = $candidate }
     }
@@ -65,7 +82,10 @@ try {
         $archivePath = "$sourceTempRoot.zip"
         New-Item -ItemType Directory -Path $sourceTempRoot -Force | Out-Null
         try {
-            Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/HaianCao/ClaudApter/archive/refs/heads/main.zip' -OutFile $archivePath
+            # A remote install downloads the release this installer belongs to, so the
+            # same command always installs the same code; -SourceBranch picks a branch.
+            $sourceArchive = if ($PSBoundParameters.ContainsKey('SourceBranch')) { "https://github.com/HaianCao/ClaudApter/archive/refs/heads/${SourceBranch}.zip" } else { "https://github.com/HaianCao/ClaudApter/archive/refs/tags/v$adapterVersion.zip" }
+            Invoke-WebRequest -UseBasicParsing -Uri $sourceArchive -OutFile $archivePath
             Expand-Archive -LiteralPath $archivePath -DestinationPath $sourceTempRoot -Force
         }
         finally {
@@ -90,20 +110,30 @@ try {
     Write-Host "Using Python: $pythonExe"
 
     $installRoot = Join-Path $env:LOCALAPPDATA 'Programs\claudapter'
-    $venv = Join-Path $installRoot 'venv'
-    $venvPython = Join-Path $venv 'Scripts\python.exe'
-    $commandPath = Join-Path $venv 'Scripts\claude-ca.exe'
-    $isUpdate = Test-Path -LiteralPath $commandPath
+    . (Join-Path $repoRoot 'scripts\install-environment.ps1')
+    $installLock = Open-AdapterInstallLock $installRoot
+    $previousPython = Get-AdapterInstalledPython $installRoot
+    $isUpdate = [bool]$previousPython
     if ($isUpdate) { Write-Step 'Updating ClaudApter' }
     else { Write-Step 'Installing ClaudApter' }
-    if (-not (Test-Path -LiteralPath $venvPython)) {
-        New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
-        & $pythonExe -m venv $venv
-        if ($LASTEXITCODE -ne 0) { throw 'Could not create the ClaudApter Python environment.' }
+    $installTarget = $repoRoot
+    # The local Protoverta gateway is part of every install. -WithGateway is
+    # still accepted from older commands and changes nothing.
+    $protovertaVersion = '0.3.0'
+    $protovertaSha256 = '2c872095102574e9f411b98484a3fc1234eee8ffa9e40c7d13551ee33de61d2c'
+    if ($ProtovertaWheel) {
+        if (-not (Test-Path -LiteralPath $ProtovertaWheel -PathType Leaf) -or [IO.Path]::GetExtension($ProtovertaWheel) -ne '.whl') {
+            throw 'ProtovertaWheel must point to a local Protoverta wheel file.'
+        }
+        $gatewayPackages = @((Resolve-Path -LiteralPath $ProtovertaWheel).Path)
     }
-    & $venvPython -m pip install --disable-pip-version-check --force-reinstall $repoRoot
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $commandPath)) { throw 'ClaudApter package installation failed.' }
-    Add-UserPath (Join-Path $venv 'Scripts')
+    else {
+        $wheelTempRoot = Join-Path ([IO.Path]::GetTempPath()) ("protoverta-wheel-{0}" -f [guid]::NewGuid())
+        New-Item -ItemType Directory -Path $wheelTempRoot | Out-Null
+        $protovertaAsset = "https://github.com/HaianCao/Protoverta/releases/download/v$protovertaVersion/protoverta-$protovertaVersion-py3-none-any.whl"
+        $gatewayPackages = @(Get-AdapterVerifiedWheel -Uri $protovertaAsset -Sha256 $protovertaSha256 -Directory $wheelTempRoot)
+    }
+    $candidate = New-AdapterEnvironment -Root $installRoot -Python $pythonExe -Target $installTarget -GatewayPackages $gatewayPackages -Module 'claudapter' -Command 'claude-ca'
 
     Write-Step 'Checking the official Claude Code CLI'
     $claudeCommand = Get-Command claude -ErrorAction SilentlyContinue
@@ -128,15 +158,20 @@ try {
     if (-not $SkipClaudeInstall -and -not (Get-Command claude -ErrorAction SilentlyContinue) -and -not (Test-Path -LiteralPath $nativeClaude)) {
         Write-Warning 'Claude Code CLI is not on PATH yet. Install it or open a new terminal and verify: claude --version'
     }
+    Set-AdapterCurrentEnvironment $installRoot $candidate.Id
+    Add-UserPath $candidate.Bin
+    Remove-UserPath (Join-Path $installRoot 'venv\Scripts')
     if ($isUpdate) { Write-Host 'ClaudApter update complete. Provider settings and API keys were preserved.' -ForegroundColor Green }
     else { Write-Host 'ClaudApter installation complete.' -ForegroundColor Green }
-    Write-Host 'Open a new CMD, PowerShell, or Windows Terminal tab and run: claude-ca setup'
+    Write-Host 'Open a new CMD, PowerShell, or Windows Terminal tab and run: claude-ca (setup opens the first time; claude-ca setup changes providers later)'
 }
 catch {
     Write-Host "`nSetup failed: $($_.Exception.Message)" -ForegroundColor Red
     exit 1
 }
 finally {
+    if ($installLock) { $installLock.Dispose() }
+    if ($wheelTempRoot -and (Test-Path -LiteralPath $wheelTempRoot)) { Remove-Item -LiteralPath $wheelTempRoot -Recurse -Force -ErrorAction SilentlyContinue }
     if ($sourceTempRoot) {
         $tempParent = [IO.Path]::GetFullPath((Split-Path -Parent $sourceTempRoot)).TrimEnd('\')
         $expectedParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')

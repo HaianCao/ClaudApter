@@ -1,25 +1,24 @@
-"""Loopback relay that retries failed provider requests before Claude Code sees them.
+"""Direct-mode loopback relay that retries failed provider requests.
 
-Claude Code retries only timeouts, conflicts, rate limits, server errors and
-dropped connections, a few seconds apart. Providers can also fail a request
-for a while with other errors and then work again. The relay waits
-``delay_seconds`` and sends the same request again, up to ``max_retries``
-times, when:
+Shared verbatim by ClaudApter and CodexApter. In gateway mode Protoverta
+retries itself (``GatewayConfig.retry_policy``); this relay is only started for
+direct mode, so a request is retried at one layer only.
 
-* the provider answers with an HTTP error status not listed in ``skip_status``;
-* the provider cannot be reached; or
-* a Messages stream sends an ``error`` event or ends before any content.
+Failures are classified by ``protoverta.error_classes`` exactly as the gateway
+does. A transient failure (rate limit, overload, server or network error, a
+stream that fails before any output, a backend mismatch, an unknown error) is
+resent after the policy's delay; a deterministic one (bad key, no credit,
+unknown model, context overflow, content policy, invalid request) reaches the
+CLI at once. Output already forwarded is never resent.
 
-Once content has been forwarded the stream is passed through unchanged, so
-nothing is repeated. When the retries run out, the last error reaches Claude
-Code with ``x-should-retry: false`` so it is not retried again on top. Claude
-Code answers some errors (HTTP 400) by sending the request again at once with
-fewer features enabled; for ``GIVE_UP_WINDOW_SECONDS`` after giving up, failed
-requests are passed through without waiting so those follow-ups take seconds,
-not another full retry cycle each. The relay
-adds no credentials: Claude Code's own headers are forwarded to the configured
-provider origin only. Retries are logged to ``retry.log`` beside the model
-cache, because Claude Code owns the terminal.
+The last failure is marked ``x-should-retry: false`` so the CLI does not retry
+it on top. For a short window after giving up, further failures pass straight
+through: Codex reconnects and Claude Code resends a 400 with fewer features,
+and those follow-ups must not run another full cycle each.
+
+The relay adds no credentials: the CLI's own headers go to the configured
+provider origin only. Decisions are logged to ``retry.log`` (bounded) because
+the CLI owns the terminal.
 """
 
 from __future__ import annotations
@@ -33,13 +32,16 @@ import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, BinaryIO, Self
+from typing import Any, Self
 from urllib.parse import urlsplit
 
-from .config import Retry, cache_path
+from protoverta.error_classes import RetryPolicy, classify, describe
+from protoverta.retry import RetryState, retry_after
 
-# Headers that describe one connection, not the request, plus Accept-Encoding so
-# streams arrive uncompressed and can be inspected.
+from .retry_log import RetryLog
+
+# Connection-scoped headers, plus Accept-Encoding so streams arrive
+# uncompressed and can be inspected.
 _HOP_BY_HOP = {
     "accept-encoding",
     "connection",
@@ -54,10 +56,14 @@ _HOP_BY_HOP = {
     "transfer-encoding",
     "upgrade",
 }
-_PENDING_EVENTS = {"message_start", "ping"}
-_FAILED_EVENTS = {"error"}
-# Anthropic error types and the HTTP status the API uses for each.
-_ERROR_STATUS = {
+_PENDING_EVENTS = {
+    "messages": frozenset({"message_start", "ping"}),
+    "responses": frozenset({"response.created", "response.in_progress", "response.queued"}),
+}
+_FAILED_EVENTS = {"messages": frozenset({"error"}), "responses": frozenset({"error", "response.failed"})}
+# Anthropic error types and the HTTP status the API uses for each, so a failed
+# Messages stream can be answered as the error the API would have sent.
+_MESSAGES_ERROR_STATUS = {
     "invalid_request_error": 400,
     "authentication_error": 401,
     "permission_error": 403,
@@ -66,51 +72,25 @@ _ERROR_STATUS = {
     "rate_limit_error": 429,
     "overloaded_error": 529,
 }
-# Claude Code waits up to 10 minutes for a provider by default; match it.
+# Both CLIs wait about as long for a provider; the relay matches them.
 UPSTREAM_TIMEOUT_SECONDS = 600
-GIVE_UP_WINDOW_SECONDS = 30
 _CHUNK = 65536
 
 
 class _ClientGone(Exception):
-    """Claude Code closed the connection (for example the user pressed Esc)."""
+    """The CLI closed the connection (the user cancelled the turn)."""
 
 
-def _log(message: str) -> None:
-    try:
-        path = cache_path().parent / "retry.log"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {message}\n")
-    except OSError:
-        pass
-
-
-def _error(body: bytes) -> dict[str, Any]:
-    try:
-        payload = json.loads(body)
-    except ValueError:
-        return {}
-    error = payload.get("error") if isinstance(payload, dict) else None
-    return error if isinstance(error, dict) else {}
-
-
-def _summary(body: bytes) -> str:
-    message = _error(body).get("message")
-    if isinstance(message, str):
-        return message[:200]
-    return body[:200].decode("utf-8", "replace")
-
-
-def _event(block: bytes) -> tuple[str | None, bytes]:
+def _event(block: bytes) -> tuple[str | None, str]:
     name = None
-    data: list[bytes] = []
-    for line in block.splitlines():
-        if line.startswith(b"event:"):
-            name = line[6:].strip().decode("utf-8", "replace")
-        elif line.startswith(b"data:"):
+    data: list[str] = []
+    for raw in block.splitlines():
+        line = raw.decode("utf-8", "replace")
+        if line.startswith("event:"):
+            name = line[6:].strip()
+        elif line.startswith("data:"):
             data.append(line[5:].strip())
-    payload = b"\n".join(data)
+    payload = "\n".join(data)
     if name is None:
         try:
             decoded = json.loads(payload)
@@ -120,18 +100,18 @@ def _event(block: bytes) -> tuple[str | None, bytes]:
     return name, payload
 
 
-def _read_until_content(response: BinaryIO) -> tuple[bytes, str, bytes]:
-    """Buffer a Messages stream until it produces content or fails.
+def _read_until_output(response: Any, protocol: str) -> tuple[bytes, str, str]:
+    """Buffer a stream until it produces output, fails or ends.
 
-    Returns the buffered bytes, ``"ok"``, ``"failed"`` or ``"ended"`` (closed
-    before any content), and the failing event's data.
+    Returns the buffered bytes, ``ok``/``failed``/``ended`` and the failing
+    event's data.
     """
     buffered = bytearray()
     block = bytearray()
     while True:
         line = response.readline()
         if not line:
-            return bytes(buffered), "ended", b""
+            return bytes(buffered), "ended", ""
         buffered += line
         if line.strip():
             block += line
@@ -139,34 +119,35 @@ def _read_until_content(response: BinaryIO) -> tuple[bytes, str, bytes]:
         if not block:
             continue
         kind, data = _event(bytes(block))
-        if kind in _FAILED_EVENTS:
+        if kind in _FAILED_EVENTS[protocol]:
             return bytes(buffered), "failed", data
-        if kind not in _PENDING_EVENTS:
-            return bytes(buffered), "ok", b""
+        if kind not in _PENDING_EVENTS[protocol]:
+            return bytes(buffered), "ok", ""
         block.clear()
 
 
 class RetryRelay(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, upstream: str, policy: Retry):
+    def __init__(self, upstream: str, policy: RetryPolicy, protocol: str, log: RetryLog | None = None) -> None:
+        if protocol not in _PENDING_EVENTS:
+            raise ValueError("relay protocol must be messages or responses")
         parts = urlsplit(upstream)
         self.origin = f"{parts.scheme}://{parts.netloc}"
         self.prefix = parts.path.rstrip("/")
         self.policy = policy
+        self.protocol = protocol
+        self.log = log or (lambda message: None)
+        self.state = RetryState()
         self.opener = urllib.request.build_opener()
-        self.gave_up_at: float | None = None
         super().__init__(("127.0.0.1", 0), _Handler)
-
-    def may_retry(self) -> bool:
-        return self.gave_up_at is None or time.monotonic() - self.gave_up_at > GIVE_UP_WINDOW_SECONDS
 
     @property
     def base_url(self) -> str:
         return f"http://127.0.0.1:{self.server_port}{self.prefix}"
 
     def __enter__(self) -> Self:
-        self._thread = threading.Thread(target=self.serve_forever, name="claudapter-retry-relay", daemon=True)
+        self._thread = threading.Thread(target=self.serve_forever, name="adapter-retry-relay", daemon=True)
         self._thread.start()
         return self
 
@@ -206,10 +187,8 @@ class _Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length") or 0)
         return self.rfile.read(length) if length else b""
 
-    def _wait(self, attempt: int, reason: str) -> None:
-        policy = self.server.policy
-        _log(f"{self.command} {self.path}: {reason}; retry {attempt}/{policy.max_retries} in {policy.delay_seconds}s")
-        deadline = time.monotonic() + policy.delay_seconds
+    def _wait(self, seconds: float) -> None:
+        deadline = time.monotonic() + seconds
         while (remaining := deadline - time.monotonic()) > 0:
             readable, _, _ = select.select([self.connection], [], [], min(remaining, 1.0))
             if readable:
@@ -222,83 +201,115 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _relay(self) -> None:
         self.close_connection = True
-        policy = self.server.policy
+        server = self.server
+        policy = server.policy
         body = self._body()
         headers = {name: value for name, value in self.headers.items() if name.lower() not in _HOP_BY_HOP}
-        url = self.server.origin + self.path
+        url = server.origin + self.path
         attempt = 0
+        waited = 0.0
+        where = f"{self.command} {urlsplit(self.path).path}"
+
+        def retry(error_class: Any, status: int | None, upstream_headers: Any, reason: str) -> bool:
+            nonlocal attempt, waited
+            if attempt >= policy.max_retries or not policy.retryable(error_class, status, upstream_headers):
+                return False
+            if not server.state.may_retry(policy.give_up_window_seconds):
+                return False
+            delay = policy.delay(retry_after(upstream_headers) if upstream_headers is not None else None)
+            if waited + delay > policy.max_total_seconds:
+                return False
+            attempt += 1
+            server.log(f"{where}: {reason}; retry {attempt}/{policy.max_retries} in {delay:.0f}s")
+            self._wait(delay)
+            waited += delay
+            return True
+
+        def give_up(reason: str) -> None:
+            if not server.state.may_retry(policy.give_up_window_seconds):
+                server.log(f"{where}: {reason}; passed through (retries ran out moments ago)")
+                return
+            server.log(f"{where}: gave up after {attempt} retries: {reason}" if attempt else f"{where}: not retried: {reason}")
+            if attempt:
+                server.state.give_up()
+
+        def succeeded() -> None:
+            server.state.succeeded()
+            if attempt:
+                server.log(f"{where}: succeeded after {attempt} retries")
+
         try:
             while True:
                 request = urllib.request.Request(url, data=body if self.command != "GET" else None, headers=headers, method=self.command)
-                retryable = attempt < policy.max_retries and self.server.may_retry()
                 try:
-                    response = self.server.opener.open(request, timeout=UPSTREAM_TIMEOUT_SECONDS)
+                    response = server.opener.open(request, timeout=UPSTREAM_TIMEOUT_SECONDS)
                 except urllib.error.HTTPError as error:
                     payload = error.read()
-                    if error.code in policy.skip_status:
-                        self._send(error.code, error.headers, payload)
-                        return
-                    if retryable:
-                        attempt += 1
-                        self._wait(attempt, f"HTTP {error.code} {_summary(payload)}")
+                    error_class = classify(error.code, payload)
+                    reason = describe(error_class, error.code, payload)
+                    if retry(error_class, error.code, error.headers, reason):
                         continue
+                    give_up(reason)
                     self._send(error.code, error.headers, payload, final=True)
                     return
                 except (urllib.error.URLError, OSError, http.client.HTTPException) as error:
-                    if retryable:
-                        attempt += 1
-                        self._wait(attempt, f"provider unreachable: {error}")
+                    reason = f"network ({type(error).__name__})"
+                    if retry("network", None, None, reason):
                         continue
-                    message = json.dumps({"type": "error", "error": {"type": "api_error", "message": f"Provider unreachable after {attempt} retries: {error}"}}).encode()
-                    self._send(502, {"Content-Type": "application/json"}, message, final=True)
+                    give_up(reason)
+                    message = {"type": "error", "error": {"type": "api_error", "message": f"Provider unreachable after {attempt} retries: {error}"}}
+                    self._send(502, {"Content-Type": "application/json"}, json.dumps(message).encode(), final=True)
                     return
                 with response:
                     if "text/event-stream" not in response.headers.get("Content-Type", ""):
-                        self.server.gave_up_at = None
+                        succeeded()
                         self._send(response.status, response.headers, response.read())
                         return
                     try:
-                        prefix, verdict, data = _read_until_content(response)
+                        prefix, verdict, data = _read_until_output(response, server.protocol)
                     except (OSError, http.client.HTTPException) as error:
-                        prefix, verdict, data = b"", "ended", str(error).encode()
+                        prefix, verdict, data = b"", "ended", str(error)
                     if verdict == "ok":
-                        self.server.gave_up_at = None
+                        succeeded()
                         self._stream(response, prefix)
-                        if attempt:
-                            _log(f"{self.command} {self.path}: succeeded after {attempt} retries")
                         return
-                    reason = f"stream error: {_summary(data)}" if verdict == "failed" else "stream ended before content"
-                    if retryable:
-                        attempt += 1
-                        self._wait(attempt, reason)
+                    error_class = classify(None, data, stream_before_output=True) if verdict == "failed" else "stream_interrupted"
+                    reason = describe(error_class, None, data) if verdict == "failed" else "stream_interrupted (stream ended before output)"
+                    if retry(error_class, None, None, reason):
                         continue
-                    # Out of retries: report the stream failure as the HTTP
-                    # error the API would have sent, marked final.
-                    error = _error(data)
-                    payload = json.dumps({"type": "error", "error": error or {"type": "api_error", "message": f"Provider {reason}"}}).encode()
-                    status = _ERROR_STATUS.get(str(error.get("type")), 500) if error else 502
-                    self._send(status, {"Content-Type": "application/json"}, payload, final=True)
+                    give_up(reason)
+                    self._final_stream_failure(prefix, verdict, data)
                     return
         except _ClientGone:
-            _log(f"{self.command} {self.path}: Claude Code cancelled the request; retries stopped")
+            server.log(f"{where}: the CLI cancelled the request; retries stopped")
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             pass
 
-    def _headers(self, headers: Any, final: bool = False) -> None:
+    def _final_stream_failure(self, prefix: bytes, verdict: str, data: str) -> None:
+        if self.server.protocol == "responses":
+            # Codex reports a forwarded response.failed event itself.
+            self._send(200, {"Content-Type": "text/event-stream"}, prefix, final=True)
+            return
+        # A Messages client expects an HTTP error for a failure before output.
+        try:
+            detail = json.loads(data).get("error") if verdict == "failed" else None
+        except (ValueError, AttributeError):
+            detail = None
+        if not isinstance(detail, dict):
+            detail = {"type": "api_error", "message": "Provider stream ended before any content"}
+        status = _MESSAGES_ERROR_STATUS.get(str(detail.get("type")), 500 if verdict == "failed" else 502)
+        self._send(status, {"Content-Type": "application/json"}, json.dumps({"type": "error", "error": detail}).encode(), final=True)
+
+    def _headers(self, headers: Any, final: bool) -> None:
         for name, value in headers.items():
             if name.lower() not in _HOP_BY_HOP and not (final and name.lower() == "x-should-retry"):
                 self.send_header(name, value)
-
-    def _send(self, status: int, headers: Any, payload: bytes, final: bool = False) -> None:
-        self.send_response(status)
-        self._headers(headers, final)
         if final:
             self.send_header("x-should-retry", "false")
-            if self.server.may_retry():
-                self.server.gave_up_at = time.monotonic()
-                _log(f"{self.command} {self.path}: gave up after {self.server.policy.max_retries} retries; HTTP {status} {_summary(payload)}")
-            else:
-                _log(f"{self.command} {self.path}: HTTP {status} passed through (retries ran out moments ago)")
+
+    def _send(self, status: int, headers: Any, payload: bytes, *, final: bool = False) -> None:
+        self.send_response(status)
+        self._headers(headers, final)
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Connection", "close")
         self.end_headers()
@@ -306,7 +317,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _stream(self, response: http.client.HTTPResponse, prefix: bytes) -> None:
         self.send_response(response.status)
-        self._headers(response.headers)
+        self._headers(response.headers, final=False)
         self.send_header("Connection", "close")
         self.end_headers()
         self.wfile.write(prefix)
@@ -316,4 +327,4 @@ class _Handler(BaseHTTPRequestHandler):
                 self.wfile.write(chunk)
                 self.wfile.flush()
         except (OSError, http.client.HTTPException):
-            pass  # Claude Code sees the truncated stream and reports it.
+            pass  # The CLI sees the truncated stream and reports it.
