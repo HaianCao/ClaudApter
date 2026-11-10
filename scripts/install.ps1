@@ -1,4 +1,5 @@
 param([switch]$SkipClaudeInstall, [switch]$NonInteractive, [switch]$WithGateway, [string]$ProtovertaWheel, [switch]$NoPathChanges, [string]$SourceBranch = 'main')
+$adapterVersion = '0.2.0'
 $ErrorActionPreference = 'Stop'
 $sourceTempRoot = $null
 $wheelTempRoot = $null
@@ -81,7 +82,10 @@ try {
         $archivePath = "$sourceTempRoot.zip"
         New-Item -ItemType Directory -Path $sourceTempRoot -Force | Out-Null
         try {
-            Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/HaianCao/ClaudApter/archive/refs/heads/${SourceBranch}.zip" -OutFile $archivePath
+            # A remote install downloads the release this installer belongs to, so the
+            # same command always installs the same code; -SourceBranch picks a branch.
+            $sourceArchive = if ($PSBoundParameters.ContainsKey('SourceBranch')) { "https://github.com/HaianCao/ClaudApter/archive/refs/heads/${SourceBranch}.zip" } else { "https://github.com/HaianCao/ClaudApter/archive/refs/tags/v$adapterVersion.zip" }
+            Invoke-WebRequest -UseBasicParsing -Uri $sourceArchive -OutFile $archivePath
             Expand-Archive -LiteralPath $archivePath -DestinationPath $sourceTempRoot -Force
         }
         finally {

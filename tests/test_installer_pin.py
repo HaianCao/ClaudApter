@@ -17,3 +17,10 @@ def test_installer_pins_the_dependency_version_and_a_hash():
     # A released installer carries the SHA-256 of the published wheel; an
     # unreleased build refuses to download anything unverified.
     assert re.fullmatch(r"[0-9a-f]{64}", digest) or digest == "PENDING-RELEASE"
+
+
+def test_remote_install_downloads_the_release_tag_of_this_version():
+    installer = (ROOT / "scripts" / "install.ps1").read_text(encoding="utf-8")
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    assert re.search(r"\$adapterVersion = '([^']+)'", installer).group(1) == project["version"]
+    assert "archive/refs/tags/v$adapterVersion.zip" in installer
