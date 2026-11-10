@@ -120,7 +120,7 @@ try {
     # The local Protoverta gateway is part of every install. -WithGateway is
     # still accepted from older commands and changes nothing.
     $protovertaVersion = '0.3.0'
-    $protovertaSha256 = 'PENDING-RELEASE'
+    $protovertaSha256 = '2c872095102574e9f411b98484a3fc1234eee8ffa9e40c7d13551ee33de61d2c'
     if ($ProtovertaWheel) {
         if (-not (Test-Path -LiteralPath $ProtovertaWheel -PathType Leaf) -or [IO.Path]::GetExtension($ProtovertaWheel) -ne '.whl') {
             throw 'ProtovertaWheel must point to a local Protoverta wheel file.'
