@@ -3,9 +3,9 @@
 All notable changes to ClaudApter are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.2.0rc1] - 2026-11-10
+## [0.2.0] - 2026-11-10
 
-Release candidate that merges the gateway preview into `main`.
+Merges the gateway preview into `main`.
 
 ### Added
 - Setup needs only the base URL, the API key and the API the provider speaks.
@@ -24,7 +24,7 @@ Release candidate that merges the gateway preview into `main`.
 - Troubleshooting and "How ClaudApter connects" sections in the README.
 
 ### Changed
-- The local Protoverta gateway (0.3.0rc1) is installed with every install and
+- The local Protoverta gateway (0.3.0) is installed with every install and
   is the default for new providers; providers saved by 0.1 keep their mode.
   The installer verifies the gateway wheel's SHA-256 before installing it.
   `-WithGateway` is still accepted and changes nothing.

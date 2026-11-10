@@ -30,7 +30,7 @@ jobs:
         with:
           node-version: '22'
       - name: Install the pinned Protoverta wheel
-        run: python -m pip install https://github.com/HaianCao/Protoverta/releases/download/v0.3.0rc1/protoverta-0.3.0rc1-py3-none-any.whl
+        run: python -m pip install https://github.com/HaianCao/Protoverta/releases/download/v0.3.0/protoverta-0.3.0-py3-none-any.whl
       - name: Install and test
         run: |
           python -m pip install -e ".[test]" build ruff==0.17.2
@@ -76,7 +76,7 @@ jobs:
         shell: pwsh
         run: |
           $wheelDir = Join-Path $env:RUNNER_TEMP 'protoverta-wheel'
-          python -m pip download --no-deps --dest $wheelDir https://github.com/HaianCao/Protoverta/releases/download/v0.3.0rc1/protoverta-0.3.0rc1-py3-none-any.whl
+          python -m pip download --no-deps --dest $wheelDir https://github.com/HaianCao/Protoverta/releases/download/v0.3.0/protoverta-0.3.0-py3-none-any.whl
           if ($LASTEXITCODE -ne 0) { throw 'Could not download the pinned Protoverta wheel' }
           $wheel = (Get-ChildItem -LiteralPath $wheelDir -Filter 'protoverta-*.whl' | Select-Object -First 1).FullName
           & .\scripts\install.ps1 -SkipClaudeInstall -NonInteractive -ProtovertaWheel $wheel
@@ -88,7 +88,7 @@ jobs:
           & $launcher --help
           if ($LASTEXITCODE -ne 0) { throw 'claude-ca --help failed' }
           $python = Get-AdapterInstalledPython $root
-          & $python -c "import importlib.metadata, protoverta.server; assert importlib.metadata.version('protoverta') == '0.3.0rc1'"
+          & $python -c "import importlib.metadata, protoverta.server; assert importlib.metadata.version('protoverta') == '0.3.0'"
           if ($LASTEXITCODE -ne 0) { throw 'The pinned gateway component was not installed' }
           # Older install commands pass -WithGateway; it is accepted and changes nothing.
           & .\scripts\install.ps1 -SkipClaudeInstall -NonInteractive -WithGateway -ProtovertaWheel $wheel
