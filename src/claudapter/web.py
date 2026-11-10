@@ -15,6 +15,7 @@ from .config import (
     EFFORTS,
     Config,
     Provider,
+    claude_base_url,
     config_path,
     save,
     validate,
@@ -23,6 +24,7 @@ from .config import (
     validate_model_limits,
     validate_provider_id,
 )
+from .connection_probe import check_connection
 from .credentials import env_path, get_token, remove_token, store_token
 from .errors import ClaudapterError
 from .gateway_options import validate_gateway_limits, validate_gateway_runtime
@@ -91,6 +93,50 @@ def persist_provider_change(config: Config, updated: Config, provider_id: str, t
     config.default_model = updated.default_model
     config.default_effort = updated.default_effort
     config.path = updated.path
+
+
+_PROTOCOL_LABELS = {"messages": "Anthropic Messages", "chat": "Chat Completions", "responses": "Responses"}
+
+
+def probe_urls(base_url: str, protocol: str) -> tuple[str, str]:
+    """Model-list and endpoint URLs exactly as the launcher and gateway use them."""
+    if protocol == "messages":
+        base = claude_base_url(base_url)
+        return base + "/v1/models", base + "/v1/messages"
+    prefix = validate_base_url(base_url, protocol).rstrip("/")
+    return prefix + "/models", prefix + ("/chat/completions" if protocol == "chat" else "/responses")
+
+
+def detect_connection(config: Config, body: dict, probe=check_connection) -> tuple[dict, list[str]]:
+    """Resolve ``auth_mode: auto`` (Bearer, else x-api-key) before saving a provider.
+
+    Uses the pasted key, or the saved one when editing. Never generates text.
+    A key both auth styles reject is an error; anything else is saved with notes.
+    """
+    if str(body.get("auth_mode", "")) != "auto":
+        return body, []
+    body = {**body, "auth_mode": "bearer"}
+    protocol = str(body.get("protocol", "messages"))
+    token = str(body.get("api_key") or "")
+    if not token:
+        try:
+            token = get_token(config, validate_provider_id(str(body.get("id", "")).strip()))
+        except ClaudapterError:
+            token = ""
+    try:
+        models_url, endpoint_url = probe_urls(str(body.get("base_url", "")), protocol)
+    except ClaudapterError:
+        return body, []  # Saving reports the invalid URL.
+    if not token:
+        return body, []
+    result = probe(models_url, endpoint_url, token, protocol_label=_PROTOCOL_LABELS.get(protocol, protocol))
+    if result.key_rejected:
+        raise ClaudapterError(result.notes[-1])
+    if result.auth_mode:
+        body["auth_mode"] = result.auth_mode
+    if result.official_client_only and protocol == "messages":
+        body["execution_mode"] = "direct"
+    return body, list(result.notes)
 
 
 def serve(config: Config) -> int:
@@ -228,6 +274,10 @@ def serve(config: Config) -> int:
                 if urlsplit(self.path).path == "/api/models/refresh":
                     self._refresh(body)
                     return
+                self._notes = []
+                if urlsplit(self.path).path == "/api/provider":
+                    # Network checks run before taking the settings lock.
+                    body, self._notes = detect_connection(config, body)
                 with state_lock, guard.edit():
                     self._post(body)
             except TimeoutError:
@@ -287,7 +337,7 @@ def serve(config: Config) -> int:
                         raise ClaudapterError("Choose Bearer token or API key authentication.")
                     old_provider = config.providers.get(provider_id)
                     default_model = str(body.get("default_model", "")).strip() or (old_provider.default_model if old_provider else "")
-                    execution_mode = str(body.get("execution_mode", old_provider.execution_mode if old_provider else "direct"))
+                    execution_mode = str(body.get("execution_mode", old_provider.execution_mode if old_provider else "gateway"))
                     protocol = str(body.get("protocol", old_provider.protocol if old_provider else "messages"))
                     upstream_reasoning = str(body.get("upstream_reasoning", old_provider.upstream_reasoning if old_provider else "auto"))
                     capabilities_file, require_verified = validate_capability_settings(
@@ -320,7 +370,7 @@ def serve(config: Config) -> int:
                     updated = copy.deepcopy(config)
                     updated.providers[provider_id] = provider
                     persist_provider_change(config, updated, provider_id, str(body["api_key"]) if body.get("api_key") else None)
-                    self._json(public_config(config))
+                    self._json({**public_config(config), "notes": getattr(self, "_notes", [])})
                     return
                 if path == "/api/default":
                     provider = self._provider(str(body.get("provider", "")))

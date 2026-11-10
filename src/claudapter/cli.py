@@ -39,9 +39,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         config = load()
-        if args.command == "setup":
+        first_run = args.command in (None, "run") and not config.providers and not getattr(args, "provider", None)
+        if args.command == "setup" or first_run:
             from .web import serve
 
+            if first_run:
+                print("No provider is set up yet. Opening ClaudApter setup: add your endpoint and API key there.", file=sys.stderr)
             return serve(config)
         if args.command == "validate":
             print("Configuration is valid.")

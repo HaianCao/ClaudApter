@@ -104,8 +104,14 @@ def request_json(request: urllib.request.Request, timeout: float = 12, *, budget
                 raise ClaudapterError("Provider returned an invalid JSON object.")
             return data
     except urllib.error.HTTPError as exc:
+        try:
+            body = exc.read(4096) if exc.fp is not None else b""
+        except (OSError, ValueError):
+            body = b""
         exc.close()
-        raise ClaudapterError(f"Provider returned HTTP {exc.code}.") from None
+        from .connection_probe import friendly_http_error
+
+        raise ClaudapterError(friendly_http_error(exc.code, body)) from None
     except (urllib.error.URLError, OSError, ValueError, UnicodeError, RecursionError, HTTPException) as exc:
         raise ClaudapterError(f"Provider request failed: {type(exc).__name__}.") from None
 

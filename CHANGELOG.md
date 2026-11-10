@@ -3,12 +3,43 @@
 All notable changes to ClaudApter are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-The `main` branch is the stable launcher that connects Claude Code directly to
-Anthropic Messages providers. The `integration/protoverta` branch is the gateway preview
-**0.2.0a2**, which adds the optional [Protoverta](https://github.com/HaianCao/Protoverta)
-gateway; it will be merged into `main` once it has been fully tested.
+## [0.2.0rc1] - 2026-11-10
 
-## [Unreleased] - gateway preview 0.2.0a2 (`integration/protoverta`)
+Release candidate that merges the gateway preview into `main`.
+
+### Added
+- Setup needs only the base URL, the API key and the API the provider speaks.
+  The name and ID come from the address, authentication is detected (Bearer,
+  or `x-api-key` when the provider needs it) and the key is checked without
+  generating anything. Rejected keys, missing endpoints, providers without a
+  model list and providers that accept only official CLIs are explained.
+- Running `claude-ca` with no provider opens setup.
+- Automatic retry by error class (rate limit, overloaded, server, network,
+  stream interrupted, backend mismatch, unknown), configurable in `[retry]`:
+  Protoverta retries in gateway mode, a local relay in direct mode.
+  Deterministic errors (rejected key, no credit, unknown model, context too
+  long, content policy, invalid request) are shown at once. Decisions are
+  logged to a bounded `retry.log`.
+- AgentRouter preset (direct, official-client only).
+- Troubleshooting and "How ClaudApter connects" sections in the README.
+
+### Changed
+- The local Protoverta gateway (0.3.0rc1) is installed with every install and
+  is the default for new providers; providers saved by 0.1 keep their mode.
+  The installer verifies the gateway wheel's SHA-256 before installing it.
+  `-WithGateway` is still accepted and changes nothing.
+- Provider errors on model refresh are shown as one actionable sentence.
+- The CLI version probe waits up to 15 s (a cold first start of the native CLI
+  could exceed 3 s and silently disable version-gated features).
+
+- With the inherit agent policy, global `ANTHROPIC_DEFAULT_*_MODEL`,
+  `ANTHROPIC_SMALL_FAST_MODEL` and `CLAUDE_CODE_SUBAGENT_MODEL` values are kept and
+  a notice explains that background tasks and subagents use them.
+
+### Security
+- The setup page cannot be framed (`frame-ancestors 'none'`, `X-Frame-Options: DENY`).
+
+## Gateway preview (0.2.0a1, 0.2.0a2)
 
 ### Added
 - Setup page presets for tested providers (OpenRouter, NVIDIA NIM and TokenHarbor): the address,
@@ -47,5 +78,9 @@ gateway; it will be merged into `main` once it has been fully tested.
   is not switched to a built-in Claude model the provider does not serve.
 
 ## Stable launcher (`main`)
+
+### 0.1.1 - 2026-11-09
+- Failed provider requests are retried through a local relay (up to 10 times,
+  60 s apart, configurable in `[retry]`).
 
 See the [commit history of `main`](https://github.com/HaianCao/ClaudApter/commits/main).
