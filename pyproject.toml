@@ -35,7 +35,7 @@ Issues = "https://github.com/HaianCao/ClaudApter/issues"
 Changelog = "https://github.com/HaianCao/ClaudApter/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-test = ["pytest>=8"]
+test = ["pytest>=8", "ruff==0.17.2"]
 # Kept so older install commands that request the extra keep working.
 gateway = []
 
@@ -52,6 +52,9 @@ packages = ["src/claudapter"]
 "assets/ClaudApter_black_icon.png" = "claudapter/assets/ClaudApter_black_icon.png"
 "assets/ClaudApter_white_icon.png" = "claudapter/assets/ClaudApter_white_icon.png"
 
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/assets", "/tests", "/configs", "/scripts", "/pyproject.toml", "/README.md", "/LICENSE", "/CHANGELOG.md"]
+
 [tool.ruff]
 # Formatter width; long literals that cannot wrap are left as written.
 line-length = 160
@@ -59,3 +62,4 @@ line-length = 160
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+addopts = "-q"
