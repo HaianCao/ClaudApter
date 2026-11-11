@@ -3,7 +3,9 @@
 All notable changes to ClaudApter are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.3.0] - 2026-11-11
+
+Requires Protoverta 0.4.0; the installer pins and verifies its wheel.
 
 ### Changed
 - Gateway model discovery skips catalog entries the provider reports with

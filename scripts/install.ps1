@@ -1,5 +1,5 @@
 param([switch]$SkipClaudeInstall, [switch]$NonInteractive, [switch]$WithGateway, [string]$ProtovertaWheel, [switch]$NoPathChanges, [string]$SourceBranch = 'main')
-$adapterVersion = '0.2.0'
+$adapterVersion = '0.3.0'
 $ErrorActionPreference = 'Stop'
 $sourceTempRoot = $null
 $wheelTempRoot = $null
@@ -119,8 +119,8 @@ try {
     $installTarget = $repoRoot
     # The local Protoverta gateway is part of every install. -WithGateway is
     # still accepted from older commands and changes nothing.
-    $protovertaVersion = '0.3.0'
-    $protovertaSha256 = '2c872095102574e9f411b98484a3fc1234eee8ffa9e40c7d13551ee33de61d2c'
+    $protovertaVersion = '0.4.0'
+    $protovertaSha256 = 'PENDING-RELEASE'
     if ($ProtovertaWheel) {
         if (-not (Test-Path -LiteralPath $ProtovertaWheel -PathType Leaf) -or [IO.Path]::GetExtension($ProtovertaWheel) -ne '.whl') {
             throw 'ProtovertaWheel must point to a local Protoverta wheel file.'

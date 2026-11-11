@@ -113,7 +113,7 @@ win; leave them empty to use the reported maximums.
 
 How the gateway converts each protocol, its options and limits: [Protoverta documentation](https://haiancao.github.io/Protoverta/). Tested providers (OpenRouter, NVIDIA NIM, TokenHarbor, AgentRouter), their known limits and recommended settings: [provider compatibility](https://github.com/HaianCao/Protoverta/blob/main/docs/compatibility/providers.md).
 
-ClaudApter **0.2.0** installs [Protoverta](https://github.com/HaianCao/Protoverta) **0.3.0**; the installer verifies the gateway wheel's SHA-256 before installing it. Native Messages preserves beta headers and thinking/signature payloads. Chat and Responses translation supports text, URL/base64 user image inputs and client-side function tools, including streaming and multiple tool calls. Rich image tool results map Messages ↔ Responses; Chat routes and provider-owned file IDs remain unsupported. Public reasoning from Chat/Responses is not converted into fabricated Messages thinking/signatures.
+ClaudApter **0.3.0** installs [Protoverta](https://github.com/HaianCao/Protoverta) **0.4.0**; the installer verifies the gateway wheel's SHA-256 before installing it. Native Messages preserves beta headers and thinking/signature payloads. Chat and Responses translation supports text, URL/base64 user image inputs and client-side function tools, including streaming and multiple tool calls. Rich image tool results map Messages ↔ Responses; Chat routes and provider-owned file IDs remain unsupported. Public reasoning from Chat/Responses is not converted into fabricated Messages thinking/signatures.
 
 Under **Advanced: model compatibility checks**, you can select a local capability
 registry file and require verified capabilities. Relative paths start at the
