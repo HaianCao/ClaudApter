@@ -16,5 +16,7 @@ def test_setup_page_script_parses(tmp_path):
     assert scripts
     source = tmp_path / "setup.js"
     source.write_text("\n;\n".join(scripts), encoding="utf-8")
-    result = subprocess.run([shutil.which("node"), "--check", str(source)], capture_output=True, text=True, timeout=60, check=False)
+    result = subprocess.run(
+        [shutil.which("node"), "--check", str(source)], capture_output=True, text=True, timeout=60, check=False
+    )
     assert result.returncode == 0, result.stderr

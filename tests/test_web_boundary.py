@@ -62,7 +62,9 @@ def test_non_ascii_query_and_header_are_unauthorized_not_handler_errors(tmp_path
                 urlopen(request, timeout=2)
             with error.value as response:
                 assert response.code == 403
-        with urlopen(Request(f"http://{url.netloc}/api/config", headers={"X-Claudapter-Token": token}), timeout=2) as response:
+        with urlopen(
+            Request(f"http://{url.netloc}/api/config", headers={"X-Claudapter-Token": token}), timeout=2
+        ) as response:
             assert response.status == 200
 
 
@@ -76,8 +78,15 @@ def test_numeric_provider_save_and_reload_keeps_setup_and_other_key_readable(tmp
         origin = f"http://{url.netloc}"
         headers = {"X-Claudapter-Token": token, "Content-Type": "application/json"}
         for provider_id in ("123", "other"):
-            body = {"id": provider_id, "display_name": "Fixture " + provider_id, "base_url": "https://example.test/v1", "api_key": "synthetic-" + provider_id}
-            with urlopen(Request(origin + "/api/provider", data=json.dumps(body).encode(), headers=headers), timeout=3) as response:
+            body = {
+                "id": provider_id,
+                "display_name": "Fixture " + provider_id,
+                "base_url": "https://example.test/v1",
+                "api_key": "synthetic-" + provider_id,
+            }
+            with urlopen(
+                Request(origin + "/api/provider", data=json.dumps(body).encode(), headers=headers), timeout=3
+            ) as response:
                 assert response.status == 200
         with urlopen(Request(origin + "/api/config", headers=headers), timeout=3) as response:
             assert {p["id"]: p["has_key"] for p in json.load(response)["providers"]} == {"123": True, "other": True}
@@ -86,7 +95,10 @@ def test_numeric_provider_save_and_reload_keeps_setup_and_other_key_readable(tmp
         assert get_token(config, "other") == "synthetic-other"
 
     # Reconstruct setup's public state from the saved configuration.
-    assert {p["id"]: p["has_key"] for p in web.public_config(load(tmp_path / "config.toml"))["providers"]} == {"123": True, "other": True}
+    assert {p["id"]: p["has_key"] for p in web.public_config(load(tmp_path / "config.toml"))["providers"]} == {
+        "123": True,
+        "other": True,
+    }
 
 
 def test_invalid_key_save_is_atomic_and_existing_bad_key_can_be_replaced(tmp_path, monkeypatch):
@@ -100,7 +112,12 @@ def test_invalid_key_save_is_atomic_and_existing_bad_key_can_be_replaced(tmp_pat
         def post(path, body):
             return urlopen(Request(origin + path, data=json.dumps(body).encode(), headers=headers), timeout=3)
 
-        body = {"id": "fixture", "display_name": "Fixture", "base_url": "https://example.test/v1", "api_key": "synthetic-valid"}
+        body = {
+            "id": "fixture",
+            "display_name": "Fixture",
+            "base_url": "https://example.test/v1",
+            "api_key": "synthetic-valid",
+        }
         with post("/api/provider", body) as response:
             assert response.status == 200
         files = [tmp_path / "config.toml", tmp_path / ".env"]
@@ -135,7 +152,9 @@ def test_missing_mcp_variable_keeps_setup_open_and_does_not_save_defaults(tmp_pa
     monkeypatch.setattr(agent_models, "detect_version", lambda _: (2, 1, 308))
 
     mcp = tmp_path / "mcp.json"
-    mcp.write_text(json.dumps({"mcpServers": {"fixture": {"command": sys.executable, "env_vars": ["MISSING_FIXTURE_VARIABLE"]}}}))
+    mcp.write_text(
+        json.dumps({"mcpServers": {"fixture": {"command": sys.executable, "env_vars": ["MISSING_FIXTURE_VARIABLE"]}}})
+    )
     monkeypatch.setenv("CLAUDE_CA_MCP_CONFIG", str(mcp))
     monkeypatch.delenv("MISSING_FIXTURE_VARIABLE", raising=False)
     monkeypatch.setattr(launcher.shutil, "which", lambda _: "claude.exe")
@@ -143,12 +162,26 @@ def test_missing_mcp_variable_keeps_setup_open_and_does_not_save_defaults(tmp_pa
     with listener(tmp_path, monkeypatch) as (_, url, token, _), patch.object(web, "launch") as launched:
         origin = f"http://{url.netloc}"
         headers = {"X-Claudapter-Token": token, "Content-Type": "application/json"}
-        provider = {"id": "fixture", "display_name": "Fixture", "base_url": "https://example.test/v1", "api_key": "synthetic"}
-        with urlopen(Request(origin + "/api/provider", data=json.dumps(provider).encode(), headers=headers), timeout=3) as response:
+        provider = {
+            "id": "fixture",
+            "display_name": "Fixture",
+            "base_url": "https://example.test/v1",
+            "api_key": "synthetic",
+        }
+        with urlopen(
+            Request(origin + "/api/provider", data=json.dumps(provider).encode(), headers=headers), timeout=3
+        ) as response:
             assert response.status == 200
         before = (tmp_path / "config.toml").read_bytes()
         with pytest.raises(HTTPError) as error:
-            urlopen(Request(origin + "/api/run", data=json.dumps({"provider": "fixture", "model": "m"}).encode(), headers=headers), timeout=3)
+            urlopen(
+                Request(
+                    origin + "/api/run",
+                    data=json.dumps({"provider": "fixture", "model": "m"}).encode(),
+                    headers=headers,
+                ),
+                timeout=3,
+            )
         with error.value as response:
             assert response.status == 400
             assert "missing from the child" in json.load(response)["error"]
@@ -187,7 +220,9 @@ def test_header_deadline_capacity_and_recovery(tmp_path, monkeypatch):
             while server._active and time.monotonic() < deadline:
                 time.sleep(0.01)
             assert not server._active
-            with urlopen(Request(f"http://{url.netloc}/api/config", headers={"X-Claudapter-Token": token}), timeout=2) as response:
+            with urlopen(
+                Request(f"http://{url.netloc}/api/config", headers={"X-Claudapter-Token": token}), timeout=2
+            ) as response:
                 assert response.status == 200
         finally:
             for client in clients:
@@ -195,7 +230,10 @@ def test_header_deadline_capacity_and_recovery(tmp_path, monkeypatch):
 
 
 def test_trickling_body_has_absolute_deadline(tmp_path, monkeypatch):
-    with listener(tmp_path, monkeypatch) as (server, url, token, _), socket.create_connection(server.server_address, timeout=2) as client:
+    with (
+        listener(tmp_path, monkeypatch) as (server, url, token, _),
+        socket.create_connection(server.server_address, timeout=2) as client,
+    ):
         headers = f"POST /api/provider HTTP/1.0\r\nHost: {url.netloc}\r\nX-Claudapter-Token: {token}\r\nContent-Length: 1000\r\n\r\n".encode()
         client.sendall(headers + b"{")
         for _ in range(2):
@@ -206,7 +244,10 @@ def test_trickling_body_has_absolute_deadline(tmp_path, monkeypatch):
 
 
 def test_shutdown_closes_pending_header_clients(tmp_path, monkeypatch):
-    with listener(tmp_path, monkeypatch) as (server, _, _, _), socket.create_connection(server.server_address, timeout=2) as client:
+    with (
+        listener(tmp_path, monkeypatch) as (server, _, _, _),
+        socket.create_connection(server.server_address, timeout=2) as client,
+    ):
         client.sendall(b"GET / HTTP/1.0\r\nX-Fixture:")
         server.shutdown()
         server.server_close()
@@ -239,7 +280,10 @@ def test_deep_json_returns_400_without_mutation_and_valid_post_recovers(tmp_path
                 return json.load(response)
 
         def files():
-            return {name: (tmp_path / name).read_bytes() if (tmp_path / name).exists() else None for name in ("config.toml", ".env")}
+            return {
+                name: (tmp_path / name).read_bytes() if (tmp_path / name).exists() else None
+                for name in ("config.toml", ".env")
+            }
 
         before, saved = state(), files()
         # Valid JSON below the body byte cap, but beyond the decoder's nesting.
@@ -252,7 +296,11 @@ def test_deep_json_returns_400_without_mutation_and_valid_post_recovers(tmp_path
             actual_overflow = True
         # Decoder stack limits vary by OS/Python. Also inject the exception so
         # this boundary contract is exercised even where this payload parses.
-        decoder = patch.object(web.json, "loads", side_effect=RecursionError("private decoder detail")) if force_decoder_error else nullcontext()
+        decoder = (
+            patch.object(web.json, "loads", side_effect=RecursionError("private decoder detail"))
+            if force_decoder_error
+            else nullcontext()
+        )
         with decoder, pytest.raises(HTTPError) as error:
             urlopen(Request(f"http://{url.netloc}/api/provider", data=data, headers=headers), timeout=2)
         with error.value as response:
@@ -263,6 +311,8 @@ def test_deep_json_returns_400_without_mutation_and_valid_post_recovers(tmp_path
         assert state() == before and files() == saved
 
         valid = {"id": "fixture", "display_name": "Fixture", "base_url": "https://example.invalid/v1"}
-        with urlopen(Request(f"http://{url.netloc}/api/provider", data=json.dumps(valid).encode(), headers=headers), timeout=2) as response:
+        with urlopen(
+            Request(f"http://{url.netloc}/api/provider", data=json.dumps(valid).encode(), headers=headers), timeout=2
+        ) as response:
             assert response.status == 200
         assert [provider["id"] for provider in state()["providers"]] == ["fixture"]

@@ -113,7 +113,12 @@ def test_selected_policy_is_child_only_and_keeps_auth_and_main_effort(tmp_path, 
         monkeypatch.setattr(launcher, "cross_protocol_environment", lambda _: {})
     before = dict(os.environ)
     args, env = launcher.build_invocation(
-        config, provider, "provider/selected", "high", [], **({"gateway_url": "http://127.0.0.1:4567", "gateway_token": "synthetic-local"} if gateway else {})
+        config,
+        provider,
+        "provider/selected",
+        "high",
+        [],
+        **({"gateway_url": "http://127.0.0.1:4567", "gateway_token": "synthetic-local"} if gateway else {}),
     )
     assert os.environ == before
     assert env["UNRELATED_SETTING"] == "preserve-me"
@@ -140,7 +145,9 @@ def test_explicit_policy_on_unknown_version_fails_before_launch(tmp_path, monkey
 
 def test_custom_policy_has_explicit_precedence_and_effort(monkeypatch):
     monkeypatch.setattr(agent_models, "detect_version", lambda _: (2, 1, 308))
-    values = agent_models.agent_environment(["fixture"], {"policy": "custom", "haiku": "provider/fast", "default": "provider/worker"}, "provider/main")
+    values = agent_models.agent_environment(
+        ["fixture"], {"policy": "custom", "haiku": "provider/fast", "default": "provider/worker"}, "provider/main"
+    )
     assert values["CLAUDE_CODE_SUBAGENT_MODEL_FORCE"] == "0"
     assert values["CLAUDE_CODE_SUBAGENT_MODEL"] == "provider/worker"
     assert values["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "provider/fast"

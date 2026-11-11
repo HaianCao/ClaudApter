@@ -58,7 +58,19 @@ def test_supported_npm_entry_preserves_real_subprocess_argv(tmp_path, monkeypatc
     assert "SHIM_EXECUTED" not in result.stdout
 
 
-@pytest.mark.parametrize("mutation", ["wrong_package", "escape", "batch_entry", "missing_entry", "bad_json", "oversized_json", "missing_node", "batch_node"])
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "wrong_package",
+        "escape",
+        "batch_entry",
+        "missing_entry",
+        "bad_json",
+        "oversized_json",
+        "missing_node",
+        "batch_node",
+    ],
+)
 def test_unverified_or_unsafe_npm_layout_is_refused(tmp_path, monkeypatch, mutation):
     shim, root, _entry, metadata = npm_fixture(tmp_path)
     body = {"name": PACKAGE, "bin": {COMMAND: "entry.js"}}
@@ -77,7 +89,10 @@ def test_unverified_or_unsafe_npm_layout_is_refused(tmp_path, monkeypatch, mutat
         node = None
     elif mutation == "batch_node":
         node = str(tmp_path / "node.cmd")
-    metadata.write_text("{" if mutation == "bad_json" else " " * 65537 if mutation == "oversized_json" else json.dumps(body), encoding="utf-8")
+    metadata.write_text(
+        "{" if mutation == "bad_json" else " " * 65537 if mutation == "oversized_json" else json.dumps(body),
+        encoding="utf-8",
+    )
     monkeypatch.setattr("claudapter.command.shutil.which", lambda name: node)
     with pytest.raises(ValueError, match="Cannot safely run"):
         command_prefix(str(shim), COMMAND, PACKAGE)
@@ -132,7 +147,9 @@ def test_unknown_batch_shim_is_a_typed_launch_failure(tmp_path, monkeypatch):
     shim.write_text("@echo off\necho SHIM_EXECUTED\n", encoding="ascii")
     monkeypatch.setattr(launcher.shutil, "which", lambda name: str(shim))
     with pytest.raises(ClaudapterError, match="Cannot safely run"):
-        launcher.build_invocation(Config(), Provider("fixture", "Fixture", "https://example.invalid/v1"), "model", "default", [])
+        launcher.build_invocation(
+            Config(), Provider("fixture", "Fixture", "https://example.invalid/v1"), "model", "default", []
+        )
 
 
 @pytest.mark.parametrize("model,extra", [("bad\0model", []), ("valid", ["bad\0prompt"])])

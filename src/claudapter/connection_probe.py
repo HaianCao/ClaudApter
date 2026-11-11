@@ -51,7 +51,9 @@ def friendly_http_error(status: int, raw: bytes = b"") -> str:
         return "This provider only accepts its official CLIs, so the model list cannot be read here. Enter the model ID yourself."
     if status in (401, 403):
         return f"The provider rejected the API key (HTTP {status}). Edit the provider and paste a valid key."
-    if status == 402 or any(word in message for word in ("insufficient credit", "insufficient quota", "insufficient balance", "billing")):
+    if status == 402 or any(
+        word in message for word in ("insufficient credit", "insufficient quota", "insufficient balance", "billing")
+    ):
         return f"The provider reports no credit or quota left (HTTP {status}). Top up the account, then try again."
     if status == 404:
         return "This provider has no model list at this address (HTTP 404). Enter the model ID yourself, or check the base URL."
@@ -74,7 +76,9 @@ class ProbeResult:
     notes: list[str] = field(default_factory=list)
 
 
-def check_connection(models_url: str, endpoint_url: str, token: str, *, protocol_label: str, opener=None) -> ProbeResult:
+def check_connection(
+    models_url: str, endpoint_url: str, token: str, *, protocol_label: str, opener=None
+) -> ProbeResult:
     """Find the auth header the provider accepts and whether the endpoint exists.
 
     The endpoint itself checks the key: some model lists (OpenRouter's) are
@@ -86,7 +90,9 @@ def check_connection(models_url: str, endpoint_url: str, token: str, *, protocol
 
     def request(method: str, url: str, headers: dict[str, str], body: bytes | None = None) -> tuple[int | None, bytes]:
         try:
-            with open_url(urllib.request.Request(url, data=body, headers=headers, method=method), timeout=TIMEOUT_SECONDS) as response:
+            with open_url(
+                urllib.request.Request(url, data=body, headers=headers, method=method), timeout=TIMEOUT_SECONDS
+            ) as response:
                 return response.status, response.read(4096)
         except urllib.error.HTTPError as error:
             return error.code, error.read(4096) if error.fp is not None else b""
@@ -113,22 +119,32 @@ def check_connection(models_url: str, endpoint_url: str, token: str, *, protocol
                     return None, status, 0
                 rejected += 1
                 continue
-            return (style if status is not None and status not in (404, 405) and status < 500 else None), status, rejected
+            return (
+                (style if status is not None and status not in (404, 405) and status < 500 else None),
+                status,
+                rejected,
+            )
         return None, status, rejected
 
     style, status, rejected = attempt("POST", endpoint_url, {"Content-Type": "application/json"}, b"{}")
     if result.official_client_only:
         return result
     if status is None:
-        result.notes.append("Could not reach the provider to check the key. Check the base URL and your network; the settings were saved.")
+        result.notes.append(
+            "Could not reach the provider to check the key. Check the base URL and your network; the settings were saved."
+        )
         return result
     if rejected == 2:
         result.key_rejected = True
-        result.notes.append("The provider rejected this API key (both Bearer and x-api-key). Check that the key is correct and active.")
+        result.notes.append(
+            "The provider rejected this API key (both Bearer and x-api-key). Check that the key is correct and active."
+        )
         return result
     if status in (404, 405):
         result.endpoint_available = False
-        result.notes.append(f"This provider has no {protocol_label} endpoint at this address. Check the base URL or choose another protocol.")
+        result.notes.append(
+            f"This provider has no {protocol_label} endpoint at this address. Check the base URL or choose another protocol."
+        )
     elif style is not None:
         result.endpoint_available, result.auth_mode = True, style
     models_style = result.auth_mode
@@ -139,7 +155,9 @@ def check_connection(models_url: str, endpoint_url: str, token: str, *, protocol
             return result
         if rejected == 2:
             result.key_rejected = True
-            result.notes.append("The provider rejected this API key (both Bearer and x-api-key). Check that the key is correct and active.")
+            result.notes.append(
+                "The provider rejected this API key (both Bearer and x-api-key). Check that the key is correct and active."
+            )
             return result
         result.auth_mode = models_style
     else:

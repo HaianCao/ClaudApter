@@ -41,7 +41,9 @@ def _headers(config: Config, provider: Provider, *, token=_UNSET) -> dict[str, s
     headers = {"accept": "application/json"}
     if provider.protocol == "messages":
         headers["anthropic-version"] = "2023-06-01"
-    headers["Authorization" if provider.auth_mode == "bearer" else "x-api-key"] = f"Bearer {token}" if provider.auth_mode == "bearer" else token
+    headers["Authorization" if provider.auth_mode == "bearer" else "x-api-key"] = (
+        f"Bearer {token}" if provider.auth_mode == "bearer" else token
+    )
     return headers
 
 
@@ -120,7 +122,13 @@ def request_json(request: urllib.request.Request, timeout: float = 12, *, budget
 # Token limits that providers report in their model lists. These are the
 # provider's own numbers (OpenRouter and TokenHarbor report them; NVIDIA NIM
 # does not); nothing is estimated. The first positive integer found wins.
-_CONTEXT_FIELDS = ("context_window_tokens", "context_window", "context_length", "max_input_tokens", "top_provider.context_length")
+_CONTEXT_FIELDS = (
+    "context_window_tokens",
+    "context_window",
+    "context_length",
+    "max_input_tokens",
+    "top_provider.context_length",
+)
 _OUTPUT_FIELDS = ("max_output_tokens", "max_completion_tokens", "top_provider.max_completion_tokens")
 _GATEWAY_CONTEXT_FIELD, _GATEWAY_OUTPUT_FIELD = "context_length", "top_provider.max_completion_tokens"
 _MAX_REPORTED_TOKENS = 2**31 - 1
@@ -138,7 +146,10 @@ def _reported_number(entry, paths):
 
 def reported_limits(entry) -> dict:
     """``context_window_tokens`` and ``max_output_tokens`` a model list reports, or ``None``."""
-    return {"context_window_tokens": _reported_number(entry, _CONTEXT_FIELDS), "max_output_tokens": _reported_number(entry, _OUTPUT_FIELDS)}
+    return {
+        "context_window_tokens": _reported_number(entry, _CONTEXT_FIELDS),
+        "max_output_tokens": _reported_number(entry, _OUTPUT_FIELDS),
+    }
 
 
 def _present_limits(entry) -> dict:
@@ -207,7 +218,12 @@ def _note_skipped(items):
 
 def _gateway_models(config, provider, headers=None, budget=None, *, timeout=12):
     try:
-        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or not math.isfinite(timeout)
+            or timeout <= 0
+        ):
             raise ValueError("Catalog timeout must be a finite positive number.")
         from protoverta.discovery import CatalogPolicy, fetch_catalog
 
@@ -238,7 +254,9 @@ def _gateway_models(config, provider, headers=None, budget=None, *, timeout=12):
             _note_skipped(items)
             return [item.as_dict() for item in items]
     except ImportError:
-        raise ClaudapterError("Gateway discovery needs the Protoverta component. Run the installer command again to repair it.") from None
+        raise ClaudapterError(
+            "Gateway discovery needs the Protoverta component. Run the installer command again to repair it."
+        ) from None
     except (ValueError, OSError, TypeError):
         raise ClaudapterError("Gateway catalog failed validation or exceeded its resource budget.") from None
 
@@ -254,7 +272,10 @@ def _direct_models(config, provider, headers, timeout, budget=None):
                 query = {"limit": "1000"} if provider.protocol == "messages" else {}
                 if cursor:
                     query["after_id"] = cursor
-                request = urllib.request.Request(_url(provider, "/v1/models") + ("?" + urllib.parse.urlencode(query) if query else ""), headers=headers)
+                request = urllib.request.Request(
+                    _url(provider, "/v1/models") + ("?" + urllib.parse.urlencode(query) if query else ""),
+                    headers=headers,
+                )
                 data = request_json(request, budget=active_budget)
                 entries = data.get("data")
                 if not isinstance(entries, list):
@@ -296,7 +317,9 @@ def store_catalog(config, provider_id, entry):
             existing[provider_id] = entry
             temporary = None
             try:
-                with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, prefix=".models-", suffix=".tmp", delete=False) as stream:
+                with tempfile.NamedTemporaryFile(
+                    "w", encoding="utf-8", dir=path.parent, prefix=".models-", suffix=".tmp", delete=False
+                ) as stream:
                     temporary = stream.name
                     json.dump(existing, stream, ensure_ascii=False)
                 os.replace(temporary, path)
@@ -307,14 +330,23 @@ def store_catalog(config, provider_id, entry):
         pass  # Catalog caching must never break a successful live discovery.
 
 
-def fetch_models(config: Config, provider: Provider, *, timeout=12, cache_sink=None, budget=None, token=_UNSET) -> list[dict[str, str]]:
+def fetch_models(
+    config: Config, provider: Provider, *, timeout=12, cache_sink=None, budget=None, token=_UNSET
+) -> list[dict[str, str]]:
     if token is _UNSET:
         token = get_token(config, provider.id)
     headers = _headers(config, provider, token=token)
     identity = _identity(config, provider, token=token)
-    gateway_info = _gateway_models(config, provider, headers, budget, timeout=timeout) if provider.execution_mode == "gateway" else None
+    gateway_info = (
+        _gateway_models(config, provider, headers, budget, timeout=timeout)
+        if provider.execution_mode == "gateway"
+        else None
+    )
     models = (
-        {item["id"]: {"id": item["id"], "display_name": item["display_name"], **_present_limits(item)} for item in gateway_info}
+        {
+            item["id"]: {"id": item["id"], "display_name": item["display_name"], **_present_limits(item)}
+            for item in gateway_info
+        }
         if gateway_info is not None
         else _direct_models(config, provider, headers, timeout, budget)
     )
@@ -365,7 +397,10 @@ def cached_models(config: Config, provider: Provider) -> tuple[list[dict[str, st
         if entry.get("identity") != _identity(config, provider) or not isinstance(entry.get("models"), list):
             return [], True
         if any(
-            not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"] or not isinstance(item.get("display_name"), str)
+            not isinstance(item, dict)
+            or not isinstance(item.get("id"), str)
+            or not item["id"]
+            or not isinstance(item.get("display_name"), str)
             for item in entry["models"]
         ):
             return [], True
@@ -399,10 +434,14 @@ def cached_model_limits(config, provider, model, *, token=_UNSET) -> dict:
 
 
 def probe_messages(config: Config, provider: Provider, model: str) -> dict:
-    payload = json.dumps({"model": model, "max_tokens": 1, "messages": [{"role": "user", "content": "."}], "stream": False}).encode("utf-8")
+    payload = json.dumps(
+        {"model": model, "max_tokens": 1, "messages": [{"role": "user", "content": "."}], "stream": False}
+    ).encode("utf-8")
     headers = _headers(config, provider)
     headers["content-type"] = "application/json"
-    result = request_json(urllib.request.Request(_url(provider, "/v1/messages"), data=payload, headers=headers, method="POST"), timeout=30)
+    result = request_json(
+        urllib.request.Request(_url(provider, "/v1/messages"), data=payload, headers=headers, method="POST"), timeout=30
+    )
     if not isinstance(result.get("content"), list):
         raise ClaudapterError("Provider did not return a Messages-compatible response.")
     return result

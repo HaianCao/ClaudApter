@@ -17,7 +17,16 @@ def test_runtime_limits_round_trip_and_reach_gateway(tmp_path):
     assert restored.providers["demo"].gateway_limits == provider.gateway_limits
 
 
-@pytest.mark.parametrize("value", [{"unknown": 1}, {"total_timeout": float("nan")}, {"timeout": True}, {"max_stream_items": 2.5}, {"progress_timeout": 0}])
+@pytest.mark.parametrize(
+    "value",
+    [
+        {"unknown": 1},
+        {"total_timeout": float("nan")},
+        {"timeout": True},
+        {"max_stream_items": 2.5},
+        {"progress_timeout": 0},
+    ],
+)
 def test_invalid_runtime_limits_are_rejected(value):
     with pytest.raises(ClaudapterError):
         validate_gateway_limits(value, "gateway")

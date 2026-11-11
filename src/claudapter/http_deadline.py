@@ -29,7 +29,12 @@ def _abort(sock: socket.socket) -> None:
 
 class Deadline:
     def __init__(self, seconds: float) -> None:
-        if isinstance(seconds, bool) or not isinstance(seconds, int | float) or not math.isfinite(seconds) or seconds <= 0:
+        if (
+            isinstance(seconds, bool)
+            or not isinstance(seconds, int | float)
+            or not math.isfinite(seconds)
+            or seconds <= 0
+        ):
             raise ValueError("HTTP deadline must be a finite positive number")
         self.end = time.monotonic() + seconds
         self.sockets: list[socket.socket] = []
@@ -121,7 +126,9 @@ def _connection(kind: type[HTTPConnection], request: Request) -> type[HTTPConnec
             if isinstance(self, HTTPSConnection):
                 # The TLS handshake runs under the deadline, so it is done here
                 # with the connection's own (http.client-built) context.
-                tls = self._context.wrap_socket(self.sock, server_hostname=self._tunnel_host or self.host, do_handshake_on_connect=False)
+                tls = self._context.wrap_socket(
+                    self.sock, server_hostname=self._tunnel_host or self.host, do_handshake_on_connect=False
+                )
                 self.sock = tls
                 budget.bind(tls)
                 tls.settimeout(budget.remaining())
@@ -137,7 +144,9 @@ class DeadlineHTTPHandler(HTTPHandler):
 
 
 class DeadlineHTTPSHandler(HTTPSHandler):
-    def __init__(self, debuglevel: int | None = None, context: ssl.SSLContext | None = None, check_hostname: bool | None = None) -> None:
+    def __init__(
+        self, debuglevel: int | None = None, context: ssl.SSLContext | None = None, check_hostname: bool | None = None
+    ) -> None:
         # Python 3.11 expects an integer debug level; later versions accept None.
         super().__init__(0 if debuglevel is None else debuglevel, context, check_hostname)
         # Kept here rather than read back from CPython's private attributes.

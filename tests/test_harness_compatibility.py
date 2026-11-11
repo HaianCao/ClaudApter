@@ -29,7 +29,15 @@ def reset_probe_cache():
 
 def test_parse_exact_release_and_reject_ambiguous_output():
     assert harness.parse_version(b"2.1.308 (Claude Code)\r\n") == (2, 1, 308)
-    for raw in (b"", b"1.2", b"not-a-cli 1.2.3", b"2.1.308 (Claude Code)-dev", b"x" * 257, b"2.1.308 (Claude Code)\n2.1.308 (Claude Code)", b"\xff"):
+    for raw in (
+        b"",
+        b"1.2",
+        b"not-a-cli 1.2.3",
+        b"2.1.308 (Claude Code)-dev",
+        b"x" * 257,
+        b"2.1.308 (Claude Code)\n2.1.308 (Claude Code)",
+        b"\xff",
+    ):
         assert harness.parse_version(raw) is None
 
 

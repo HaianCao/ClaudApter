@@ -8,7 +8,9 @@ from claudapter.errors import ClaudapterError
 from claudapter.launcher import build_invocation
 
 
-@pytest.mark.parametrize("provider_id", ["anthropic_auth", "claude_code_oauth", "claude_code_setup", "claude-code-oauth"])
+@pytest.mark.parametrize(
+    "provider_id", ["anthropic_auth", "claude_code_oauth", "claude_code_setup", "claude-code-oauth"]
+)
 def test_native_auth_is_never_selected_and_gateway_token_survives(tmp_path, monkeypatch, provider_id):
     name, legacy = secret_names(provider_id)
     monkeypatch.setenv("CLAUDE_CA_ENV_FILE", str(tmp_path / ".env"))
@@ -25,7 +27,15 @@ def test_native_auth_is_never_selected_and_gateway_token_survives(tmp_path, monk
     assert f'{name}="synthetic-adapter-key"' in content
     assert "synthetic-native-token" not in content
     monkeypatch.setenv(name, "synthetic-environment-adapter-key")
-    args, env = build_invocation(config, provider, "m", "default", [], gateway_url="http://127.0.0.1:12345", gateway_token="synthetic-local-token")
+    args, env = build_invocation(
+        config,
+        provider,
+        "m",
+        "default",
+        [],
+        gateway_url="http://127.0.0.1:12345",
+        gateway_token="synthetic-local-token",
+    )
     assert env["ANTHROPIC_AUTH_TOKEN"] == "synthetic-local-token"
     assert "CLAUDE_CODE_OAUTH_TOKEN" not in env and "CLAUDE_CODE_SETUP_TOKEN" not in env
     assert name not in env and "synthetic-adapter-key" not in " ".join(args)
@@ -91,7 +101,9 @@ def test_digit_leading_provider_keys_round_trip_in_safe_namespace(tmp_path, monk
     assert name == "CLAUDE_CA_PROVIDER_" + legacy
     monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv(legacy, "synthetic-legacy-environment")
-    config = Config({provider_id: Provider(provider_id, "Numeric", "https://example.test/v1")}, path=tmp_path / "config.toml")
+    config = Config(
+        {provider_id: Provider(provider_id, "Numeric", "https://example.test/v1")}, path=tmp_path / "config.toml"
+    )
     save(config)
     assert get_token(config, provider_id) == ""
     store_token(config, provider_id, "synthetic-adapter-key")

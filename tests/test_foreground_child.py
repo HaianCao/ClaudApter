@@ -13,7 +13,12 @@ def test_sigint_during_child_does_not_interrupt_wrapper_and_handler_is_restored(
     timer = threading.Timer(0.3, signal.raise_signal, (signal.SIGINT,))
     with foreground_child():
         timer.start()
-        result = subprocess.run([sys.executable, "-c", "import time; time.sleep(1.2); print('done')"], capture_output=True, text=True, check=False)
+        result = subprocess.run(
+            [sys.executable, "-c", "import time; time.sleep(1.2); print('done')"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
     timer.join()
     assert result.returncode == 0 and result.stdout.strip() == "done"
     assert signal.getsignal(signal.SIGINT) is before

@@ -57,7 +57,9 @@ def _write(path: Path, values: dict[str, str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, prefix=".secrets-", suffix=".tmp", delete=False) as stream:
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", dir=path.parent, prefix=".secrets-", suffix=".tmp", delete=False
+        ) as stream:
             temporary = Path(stream.name)
             stream.write("# ClaudApter secrets. Do not commit or share this file.\n")
             stream.writelines(f"{name}={json.dumps(value)}\n" for name, value in sorted(values.items()))

@@ -83,7 +83,9 @@ def describe(version: tuple[int, int, int] | None) -> str:
     return "an unknown version" if version is None else ".".join(map(str, version))
 
 
-def require_schema(version: tuple[int, int, int] | None, feature: str, exception: type[Exception]) -> tuple[int, int, int]:
+def require_schema(
+    version: tuple[int, int, int] | None, feature: str, exception: type[Exception]
+) -> tuple[int, int, int]:
     """Allow verified/newer 2.1.x releases (newer ones warn); reject others."""
     if not schema_supported(version):
         raise exception(

@@ -229,7 +229,9 @@ class _Handler(BaseHTTPRequestHandler):
             if not server.state.may_retry(policy.give_up_window_seconds):
                 server.log(f"{where}: {reason}; passed through (retries ran out moments ago)")
                 return
-            server.log(f"{where}: gave up after {attempt} retries: {reason}" if attempt else f"{where}: not retried: {reason}")
+            server.log(
+                f"{where}: gave up after {attempt} retries: {reason}" if attempt else f"{where}: not retried: {reason}"
+            )
             if attempt:
                 server.state.give_up()
 
@@ -240,7 +242,9 @@ class _Handler(BaseHTTPRequestHandler):
 
         try:
             while True:
-                request = urllib.request.Request(url, data=body if self.command != "GET" else None, headers=headers, method=self.command)
+                request = urllib.request.Request(
+                    url, data=body if self.command != "GET" else None, headers=headers, method=self.command
+                )
                 try:
                     response = server.opener.open(request, timeout=UPSTREAM_TIMEOUT_SECONDS)
                 except urllib.error.HTTPError as error:
@@ -257,7 +261,13 @@ class _Handler(BaseHTTPRequestHandler):
                     if retry("network", None, None, reason):
                         continue
                     give_up(reason)
-                    message = {"type": "error", "error": {"type": "api_error", "message": f"Provider unreachable after {attempt} retries: {error}"}}
+                    message = {
+                        "type": "error",
+                        "error": {
+                            "type": "api_error",
+                            "message": f"Provider unreachable after {attempt} retries: {error}",
+                        },
+                    }
                     self._send(502, {"Content-Type": "application/json"}, json.dumps(message).encode(), final=True)
                     return
                 with response:
@@ -273,8 +283,14 @@ class _Handler(BaseHTTPRequestHandler):
                         succeeded()
                         self._stream(response, prefix)
                         return
-                    error_class = classify(None, data, stream_before_output=True) if verdict == "failed" else "stream_interrupted"
-                    reason = describe(error_class, None, data) if verdict == "failed" else "stream_interrupted (stream ended before output)"
+                    error_class = (
+                        classify(None, data, stream_before_output=True) if verdict == "failed" else "stream_interrupted"
+                    )
+                    reason = (
+                        describe(error_class, None, data)
+                        if verdict == "failed"
+                        else "stream_interrupted (stream ended before output)"
+                    )
                     if retry(error_class, None, None, reason):
                         continue
                     give_up(reason)
@@ -298,7 +314,12 @@ class _Handler(BaseHTTPRequestHandler):
         if not isinstance(detail, dict):
             detail = {"type": "api_error", "message": "Provider stream ended before any content"}
         status = _MESSAGES_ERROR_STATUS.get(str(detail.get("type")), 500 if verdict == "failed" else 502)
-        self._send(status, {"Content-Type": "application/json"}, json.dumps({"type": "error", "error": detail}).encode(), final=True)
+        self._send(
+            status,
+            {"Content-Type": "application/json"},
+            json.dumps({"type": "error", "error": detail}).encode(),
+            final=True,
+        )
 
     def _headers(self, headers: Any, final: bool) -> None:
         for name, value in headers.items():

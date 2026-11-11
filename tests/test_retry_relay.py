@@ -30,7 +30,10 @@ def sse(*events):
     return b"".join(f"event: {event['type']}\ndata: {json.dumps(event)}\n\n".encode() for event in events)
 
 
-START = {"type": "message_start", "message": {"id": "m", "type": "message", "role": "assistant", "content": [], "model": "x"}}
+START = {
+    "type": "message_start",
+    "message": {"id": "m", "type": "message", "role": "assistant", "content": [], "model": "x"},
+}
 BLOCK = {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}}
 DELTA = {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "PONG"}}
 STOP = {"type": "message_stop"}
@@ -68,7 +71,10 @@ class Upstream:
 
 def call(url, body=b'{"model":"m","stream":true}'):
     request = urllib.request.Request(
-        url + "/v1/messages?beta=true", data=body, headers={"Authorization": "Bearer key", "Content-Type": "application/json"}, method="POST"
+        url + "/v1/messages?beta=true",
+        data=body,
+        headers={"Authorization": "Bearer key", "Content-Type": "application/json"},
+        method="POST",
     )
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
@@ -84,7 +90,12 @@ class RelayTests(unittest.TestCase):
         self.log_path = Path(directory.name) / "retry.log"
 
     def relay(self, upstream, **policy):
-        relay = RetryRelay(upstream.url, RetryPolicy(**{"delay_seconds": 0, "jitter": 0, **policy}), "messages", RetryLog(self.log_path))
+        relay = RetryRelay(
+            upstream.url,
+            RetryPolicy(**{"delay_seconds": 0, "jitter": 0, **policy}),
+            "messages",
+            RetryLog(self.log_path),
+        )
         relay.__enter__()
         self.addCleanup(relay.__exit__, None, None, None)
         self.addCleanup(upstream.close)
@@ -94,7 +105,9 @@ class RelayTests(unittest.TestCase):
         return self.log_path.read_text(encoding="utf-8") if self.log_path.exists() else ""
 
     def test_transient_errors_are_retried_and_classified_in_the_log(self):
-        upstream = Upstream((400, "application/json", AZURE), (529, "application/json", BUSY), (200, "text/event-stream", OK_STREAM))
+        upstream = Upstream(
+            (400, "application/json", AZURE), (529, "application/json", BUSY), (200, "text/event-stream", OK_STREAM)
+        )
         status, body, _ = call(self.relay(upstream))
         self.assertEqual((status, body), (200, OK_STREAM))
         self.assertEqual(len(upstream.requests), 3)
@@ -123,7 +136,11 @@ class RelayTests(unittest.TestCase):
         self.assertIn("passed through", self.log())
 
     def test_stream_failing_before_content_is_retried_and_after_content_passed_through(self):
-        upstream = Upstream((200, "text/event-stream", sse(START, OVERLOADED)), (200, "text/event-stream", b""), (200, "text/event-stream", OK_STREAM))
+        upstream = Upstream(
+            (200, "text/event-stream", sse(START, OVERLOADED)),
+            (200, "text/event-stream", b""),
+            (200, "text/event-stream", OK_STREAM),
+        )
         self.assertEqual(call(self.relay(upstream))[:2], (200, OK_STREAM))
         self.assertEqual(len(upstream.requests), 3)
         partial = sse(START, BLOCK, DELTA, OVERLOADED)
@@ -142,7 +159,9 @@ class RelayTests(unittest.TestCase):
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
             port = probe.getsockname()[1]
-        with RetryRelay(f"http://127.0.0.1:{port}/api", RetryPolicy(max_retries=2, delay_seconds=0, jitter=0), "messages") as relay:
+        with RetryRelay(
+            f"http://127.0.0.1:{port}/api", RetryPolicy(max_retries=2, delay_seconds=0, jitter=0), "messages"
+        ) as relay:
             status, body, _headers = call(relay.base_url)
         self.assertEqual(status, 502)
         self.assertIn("unreachable after 2 retries", json.loads(body)["error"]["message"])
@@ -182,17 +201,30 @@ class RetryConfigTests(unittest.TestCase):
         # ClaudApter 0.1.1 wrote exactly this table.
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "config.toml"
-            path.write_text("schema_version = 1\n\n[retry]\nenabled = true\nmax_retries = 3\ndelay_seconds = 5\nskip_status = [401, 403]\n", encoding="utf-8")
+            path.write_text(
+                "schema_version = 1\n\n[retry]\nenabled = true\nmax_retries = 3\ndelay_seconds = 5\nskip_status = [401, 403]\n",
+                encoding="utf-8",
+            )
             config = load(path)
             save(config)
-            self.assertEqual(load(path).retry, {"enabled": True, "max_retries": 3, "delay_seconds": 5, "skip_status": [401, 403]})
+            self.assertEqual(
+                load(path).retry, {"enabled": True, "max_retries": 3, "delay_seconds": 5, "skip_status": [401, 403]}
+            )
             policy = retry_policy(load(path))
-            self.assertEqual((policy.max_retries, policy.delay_seconds, policy.skip_status), (3, 5, frozenset({401, 403})))
+            self.assertEqual(
+                (policy.max_retries, policy.delay_seconds, policy.skip_status), (3, 5, frozenset({401, 403}))
+            )
 
     def test_invalid_values_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "config.toml"
-            for table in ("max_retries = -1", "delay_seconds = 3601", "enabled = 1", 'retry_classes = ["nope"]', "surprise = 1"):
+            for table in (
+                "max_retries = -1",
+                "delay_seconds = 3601",
+                "enabled = 1",
+                'retry_classes = ["nope"]',
+                "surprise = 1",
+            ):
                 path.write_text(f"schema_version = 1\n\n[retry]\n{table}\n", encoding="utf-8")
                 with self.subTest(table=table), self.assertRaises(ClaudapterError):
                     load(path)
@@ -212,7 +244,10 @@ class RetryConfigTests(unittest.TestCase):
             provider = Provider("demo", "Demo", "https://gateway.test/v1")
             config = Config({"demo": provider}, path=Path(directory) / "config.toml")
             store_token(config, "demo", "secret")
-            with patch("claudapter.launcher.shutil.which", return_value="claude.exe"), patch.dict("os.environ", {}, clear=False) as environ:
+            with (
+                patch("claudapter.launcher.shutil.which", return_value="claude.exe"),
+                patch.dict("os.environ", {}, clear=False) as environ,
+            ):
                 environ.pop("API_TIMEOUT_MS", None)
                 _, relayed = build_invocation(config, provider, "m", "default", [], relay_url="http://127.0.0.1:5000")
                 _, plain = build_invocation(config, provider, "m", "default", [])

@@ -11,14 +11,24 @@ from claudapter.mcp import environment_references, load_servers, session_argumen
 def config(tmp_path):
     path = tmp_path / "servers.json"
     path.write_text(
-        json.dumps({"mcpServers": {"search": {"command": sys.executable, "args": ["-m", "example"], "env_vars": ["SEARCH_TOKEN"]}}}), encoding="utf-8"
+        json.dumps(
+            {
+                "mcpServers": {
+                    "search": {"command": sys.executable, "args": ["-m", "example"], "env_vars": ["SEARCH_TOKEN"]}
+                }
+            }
+        ),
+        encoding="utf-8",
     )
     return str(path)
 
 
 def test_mcp_snapshot_is_session_scoped_and_deleted_on_error(tmp_path):
     value = config(tmp_path)
-    with pytest.raises(RuntimeError, match="child failed"), session_arguments(value, {"SEARCH_TOKEN": "synthetic-key", "OTHER_KEY": "not-forwarded"}) as args:
+    with (
+        pytest.raises(RuntimeError, match="child failed"),
+        session_arguments(value, {"SEARCH_TOKEN": "synthetic-key", "OTHER_KEY": "not-forwarded"}) as args,
+    ):
         assert args[:2] == ["--strict-mcp-config", "--mcp-config"]
         path = Path(args[2])
         document = json.loads(path.read_text())
@@ -38,7 +48,9 @@ def test_mcp_requires_named_variables_and_is_opt_in(tmp_path):
 
 def test_inline_secrets_are_rejected(tmp_path):
     path = tmp_path / "servers.json"
-    path.write_text(json.dumps({"mcpServers": {"search": {"command": sys.executable, "env": {"SECRET": "do-not-echo"}}}}))
+    path.write_text(
+        json.dumps({"mcpServers": {"search": {"command": sys.executable, "env": {"SECRET": "do-not-echo"}}}})
+    )
     with pytest.raises(ValueError) as failure:
         load_servers(str(path))
     assert "do-not-echo" not in str(failure.value)
@@ -66,7 +78,12 @@ def test_npm_prefix_stays_intact_and_snapshot_lives_until_child_exit(tmp_path, m
         return SimpleNamespace(returncode=7)
 
     monkeypatch.setattr(launcher.subprocess, "run", child)
-    assert launcher.launch(Config({"demo": provider}, path=tmp_path / "config.toml"), provider, "model", "default", ["hello"]) == 7
+    assert (
+        launcher.launch(
+            Config({"demo": provider}, path=tmp_path / "config.toml"), provider, "model", "default", ["hello"]
+        )
+        == 7
+    )
     assert snapshots and not snapshots[0].exists()
 
 
@@ -105,7 +122,9 @@ def test_preflight_checks_sanitized_child_env_not_parent(tmp_path, monkeypatch):
     from claudapter.errors import ClaudapterError
 
     path = tmp_path / "mcp.json"
-    path.write_text(json.dumps({"mcpServers": {"search": {"command": sys.executable, "env_vars": ["ANTHROPIC_API_KEY"]}}}))
+    path.write_text(
+        json.dumps({"mcpServers": {"search": {"command": sys.executable, "env_vars": ["ANTHROPIC_API_KEY"]}}})
+    )
     monkeypatch.setenv("CLAUDE_CA_MCP_CONFIG", str(path))
     monkeypatch.setenv("ANTHROPIC_API_KEY", "synthetic-parent")
     monkeypatch.setattr(launcher.shutil, "which", lambda _: "claude.exe")

@@ -66,7 +66,7 @@ show_error_codes = true
 
 [tool.ruff]
 # Formatter width; long literals that cannot wrap are left as written.
-line-length = 160
+line-length = 120
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

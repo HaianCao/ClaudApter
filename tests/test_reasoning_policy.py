@@ -12,7 +12,14 @@ from claudapter.web import public_config
 
 
 def test_policy_persistence_and_gateway(tmp_path):
-    provider = Provider("demo", "Demo", "https://example.test/v1", execution_mode="gateway", protocol="chat", upstream_reasoning="openrouter_disabled")
+    provider = Provider(
+        "demo",
+        "Demo",
+        "https://example.test/v1",
+        execution_mode="gateway",
+        protocol="chat",
+        upstream_reasoning="openrouter_disabled",
+    )
     config = Config({"demo": provider}, path=tmp_path / "config.toml")
     save(config)
     restored = load(config.path)
@@ -28,7 +35,10 @@ def test_policy_persistence_and_gateway(tmp_path):
     core.Protocol = Protocol
     server = types.ModuleType("protoverta.server")
     server.GatewayConfig, server.gateway_session = gateway_config, Mock()
-    with patch.dict(sys.modules, {"protoverta.core": core, "protoverta.server": server}), patch("claudapter.launcher.get_token", return_value="fake"):
+    with (
+        patch.dict(sys.modules, {"protoverta.core": core, "protoverta.server": server}),
+        patch("claudapter.launcher.get_token", return_value="fake"),
+    ):
         _gateway(config, provider)
     assert gateway_config.call_args.kwargs["upstream_reasoning"] == "openrouter_disabled"
 
@@ -49,7 +59,9 @@ def test_native_reasoning_override_does_not_disable_unrelated_features():
         patch("claudapter.launcher.shutil.which", return_value="claude.exe"),
         patch("claudapter.launcher.get_token", return_value="fake"),
     ):
-        args, env = build_invocation(Config(), provider, "m", "default", [], gateway_url="http://127.0.0.1:8765", gateway_token="local")
+        args, env = build_invocation(
+            Config(), provider, "m", "default", [], gateway_url="http://127.0.0.1:8765", gateway_token="local"
+        )
     assert env["MAX_THINKING_TOKENS"] == "0"
     assert "--settings" in args
     assert "DISABLE_PROMPT_CACHING" not in env
@@ -66,7 +78,9 @@ def test_native_reasoning_override_does_not_disable_unrelated_features():
         ("responses", "https://example.test/v1", "omit"),
     ],
 )
-def test_auto_reasoning_keeps_provider_default_and_omits_unrepresentable_output(tmp_path, monkeypatch, protocol, base, output):
+def test_auto_reasoning_keeps_provider_default_and_omits_unrepresentable_output(
+    tmp_path, monkeypatch, protocol, base, output
+):
     # Live checks: disabling reasoning returned HTTP 400 for mandatory-reasoning
     # models and was ignored by others, so auto never sends a disable request.
     pytest.importorskip("protoverta.automatic_reasoning")

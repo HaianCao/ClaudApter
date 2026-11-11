@@ -90,7 +90,9 @@ def test_invalid_programmatic_config_is_rejected(config):
 
 def test_valid_optional_defaults_remain_compatible(tmp_path):
     path = tmp_path / "config.toml"
-    path.write_text('schema_version = 1\n[[providers]]\nid="fixture"\ndisplay_name="Fixture"\nbase_url="https://example.test/v1"\n')
+    path.write_text(
+        'schema_version = 1\n[[providers]]\nid="fixture"\ndisplay_name="Fixture"\nbase_url="https://example.test/v1"\n'
+    )
     config = load(path)
     assert config.default_model == "" and config.providers["fixture"].upstream_reasoning == "auto"
     save(config)

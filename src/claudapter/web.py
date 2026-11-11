@@ -57,7 +57,11 @@ def public_config(config: Config) -> dict[str, Any]:
             }
             for p in config.providers.values()
         ],
-        "defaults": {"provider": config.default_provider, "model": config.default_model, "effort": config.default_effort},
+        "defaults": {
+            "provider": config.default_provider,
+            "model": config.default_model,
+            "effort": config.default_effort,
+        },
     }
     for provider in result["providers"]:
         provider["gateway_limits"] = config.providers[provider["id"]].gateway_limits
@@ -87,7 +91,9 @@ def persist_provider_change(config: Config, updated: Config, provider_id: str, t
                 else:
                     atomic_bytes(target, previous)
             except OSError:
-                raise ClaudapterError("Saving settings and restoring the API key failed. Check local storage permissions.") from exc
+                raise ClaudapterError(
+                    "Saving settings and restoring the API key failed. Check local storage permissions."
+                ) from exc
         raise
     config.providers = updated.providers
     config.default_provider = updated.default_provider
@@ -162,7 +168,9 @@ def serve(config: Config) -> int:
             self.wfile.write(body)
 
         def _authorized(self) -> bool:
-            return local_request(self.headers, server.server_port) and token_matches(self.headers.get("X-Claudapter-Token", ""), token)
+            return local_request(self.headers, server.server_port) and token_matches(
+                self.headers.get("X-Claudapter-Token", ""), token
+            )
 
         def _body(self) -> dict:
             try:
@@ -287,7 +295,10 @@ def serve(config: Config) -> int:
                 self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             except (OSError, ValueError):
                 self._json(
-                    {"error": "Could not save settings. Reopen setup if settings changed elsewhere; check local storage permissions."}, HTTPStatus.BAD_REQUEST
+                    {
+                        "error": "Could not save settings. Reopen setup if settings changed elsewhere; check local storage permissions."
+                    },
+                    HTTPStatus.BAD_REQUEST,
                 )
 
         def _refresh(self, body):
@@ -303,7 +314,9 @@ def serve(config: Config) -> int:
             entries: list[Any] = []
             try:
                 with budget:
-                    models = fetch_models(snapshot, provider, cache_sink=entries.append, budget=budget, token=credential)
+                    models = fetch_models(
+                        snapshot, provider, cache_sink=entries.append, budget=budget, token=credential
+                    )
                 with state_lock, guard.edit():
                     current = config.providers.get(provider.id)
                     if (
@@ -337,13 +350,22 @@ def serve(config: Config) -> int:
                     if mode not in {"bearer", "api_key"}:
                         raise ClaudapterError("Choose Bearer token or API key authentication.")
                     old_provider = config.providers.get(provider_id)
-                    default_model = str(body.get("default_model", "")).strip() or (old_provider.default_model if old_provider else "")
-                    execution_mode = str(body.get("execution_mode", old_provider.execution_mode if old_provider else "gateway"))
+                    default_model = str(body.get("default_model", "")).strip() or (
+                        old_provider.default_model if old_provider else ""
+                    )
+                    execution_mode = str(
+                        body.get("execution_mode", old_provider.execution_mode if old_provider else "gateway")
+                    )
                     protocol = str(body.get("protocol", old_provider.protocol if old_provider else "messages"))
-                    upstream_reasoning = str(body.get("upstream_reasoning", old_provider.upstream_reasoning if old_provider else "auto"))
+                    upstream_reasoning = str(
+                        body.get("upstream_reasoning", old_provider.upstream_reasoning if old_provider else "auto")
+                    )
                     capabilities_file, require_verified = validate_capability_settings(
                         body.get("capabilities_file", old_provider.capabilities_file if old_provider else ""),
-                        body.get("require_verified_capabilities", old_provider.require_verified_capabilities if old_provider else False),
+                        body.get(
+                            "require_verified_capabilities",
+                            old_provider.require_verified_capabilities if old_provider else False,
+                        ),
                         execution_mode,
                     )
                     provider = Provider(
@@ -362,15 +384,20 @@ def serve(config: Config) -> int:
                         body.get("gateway_limits", old_provider.gateway_limits if old_provider else {}), execution_mode
                     )
                     provider.gateway_runtime = validate_gateway_runtime(
-                        body.get("gateway_runtime", old_provider.gateway_runtime if old_provider else {}), execution_mode
+                        body.get("gateway_runtime", old_provider.gateway_runtime if old_provider else {}),
+                        execution_mode,
                     )
                     provider.agent_models = validate_agent_models(
                         body.get("agent_models", old_provider.agent_models if old_provider else {"policy": "selected"})
                     )
-                    provider.model_limits = validate_model_limits(body.get("model_limits", old_provider.model_limits if old_provider else {}))
+                    provider.model_limits = validate_model_limits(
+                        body.get("model_limits", old_provider.model_limits if old_provider else {})
+                    )
                     updated = copy.deepcopy(config)
                     updated.providers[provider_id] = provider
-                    persist_provider_change(config, updated, provider_id, str(body["api_key"]) if body.get("api_key") else None)
+                    persist_provider_change(
+                        config, updated, provider_id, str(body["api_key"]) if body.get("api_key") else None
+                    )
                     self._json({**public_config(config), "notes": getattr(self, "_notes", [])})
                     return
                 if path == "/api/default":
@@ -410,7 +437,10 @@ def serve(config: Config) -> int:
                 with state_lock, guard.edit():
                     self._delete()
             except (OSError, ValueError):
-                self._json({"error": "Could not remove provider. Reopen setup if settings changed elsewhere."}, HTTPStatus.BAD_REQUEST)
+                self._json(
+                    {"error": "Could not remove provider. Reopen setup if settings changed elsewhere."},
+                    HTTPStatus.BAD_REQUEST,
+                )
 
         def _delete(self):
             if not self._authorized():

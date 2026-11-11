@@ -30,11 +30,20 @@ def load_servers(value: str | None) -> dict:
             if set(server) - {"command", "args", "env_vars"}:
                 raise ValueError
             command = server.get("command")
-            if not isinstance(command, str) or "\0" in command or not Path(command).is_absolute() or not Path(command).is_file():
+            if (
+                not isinstance(command, str)
+                or "\0" in command
+                or not Path(command).is_absolute()
+                or not Path(command).is_file()
+            ):
                 raise ValueError
             args = server.get("args", [])
             names = server.get("env_vars", [])
-            if not isinstance(args, list) or len(args) > 128 or any(not isinstance(arg, str) or "\0" in arg for arg in args):
+            if (
+                not isinstance(args, list)
+                or len(args) > 128
+                or any(not isinstance(arg, str) or "\0" in arg for arg in args)
+            ):
                 raise ValueError
             if (
                 not isinstance(names, list)

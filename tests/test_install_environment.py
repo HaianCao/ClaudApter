@@ -65,7 +65,10 @@ def wheel(directory, version, *, broken=False, slow=False):
         archive.writestr(f"{MODULE}/__init__.py", "")
         archive.writestr(f"{MODULE}/cli.py", main)
         archive.writestr(f"{info}/METADATA", f"Metadata-Version: 2.1\nName: {PROJECT}\nVersion: {version}\n")
-        archive.writestr(f"{info}/WHEEL", "Wheel-Version: 1.0\nGenerator: synthetic-fixture\nRoot-Is-Purelib: true\nTag: py3-none-any\n")
+        archive.writestr(
+            f"{info}/WHEEL",
+            "Wheel-Version: 1.0\nGenerator: synthetic-fixture\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
+        )
         archive.writestr(f"{info}/RECORD", "")
     return path
 
@@ -108,7 +111,9 @@ def install(env, target, *, action="install"):
 
 def launch(env, *args):
     command = str(Path(env["TEST_ROOT"]) / "bin" / f"{COMMAND}.exe")
-    result = subprocess.run([command, *args], env=env, capture_output=True, text=True, errors="replace", timeout=20, check=False)
+    result = subprocess.run(
+        [command, *args], env=env, capture_output=True, text=True, errors="replace", timeout=20, check=False
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     return json.loads(result.stdout)
 
@@ -155,7 +160,9 @@ def wait_marker(env, process):
 def kill_tree(process):
     if process.poll() is None:
         # Only the tree of the process created by this test; never enumerate user processes.
-        subprocess.run(["taskkill.exe", "/PID", str(process.pid), "/T", "/F"], capture_output=True, timeout=15, check=False)
+        subprocess.run(
+            ["taskkill.exe", "/PID", str(process.pid), "/T", "/F"], capture_output=True, timeout=15, check=False
+        )
     process.wait(timeout=15)
 
 
@@ -197,14 +204,28 @@ def test_legacy_environment_is_detected_and_never_modified(tmp_path):
     assert_ok(install(env, wheel(tmp_path, "9.0.1")))
     assert legacy.read_bytes() == b"legacy-sentinel-not-executed"
     assert launch(env, "--help")["version"] == "9.0.1"
-    result = subprocess.run([str(Path(env["TEST_ROOT"]) / "bin" / f"{COMMAND}.exe"), "--exit-seven"], env=env, capture_output=True, timeout=15, check=False)
+    result = subprocess.run(
+        [str(Path(env["TEST_ROOT"]) / "bin" / f"{COMMAND}.exe"), "--exit-seven"],
+        env=env,
+        capture_output=True,
+        timeout=15,
+        check=False,
+    )
     assert result.returncode == 7
     executable = str(Path(env["TEST_ROOT"]) / "bin" / f"{COMMAND}.exe")
     for arguments in (
         ["cmd.exe", "/d", "/c", executable, "--help"],
         ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "& $env:TEST_LAUNCHER --help"],
     ):
-        result = subprocess.run(arguments, env=dict(env, TEST_LAUNCHER=executable), capture_output=True, text=True, errors="replace", timeout=20, check=False)
+        result = subprocess.run(
+            arguments,
+            env=dict(env, TEST_LAUNCHER=executable),
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=20,
+            check=False,
+        )
         assert result.returncode == 0, result.stdout + result.stderr
         assert json.loads(result.stdout)["version"] == "9.0.1"
 

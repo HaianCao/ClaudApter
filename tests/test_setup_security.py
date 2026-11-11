@@ -50,7 +50,9 @@ def handler(tmp_path):
 
 
 @pytest.mark.parametrize("method", ["GET", "POST", "DELETE"])
-@pytest.mark.parametrize("host", ["evil.example:12345", "127.0.0.1:9999", "user@127.0.0.1:12345", "127.0.0.1:12345/path", " 127.0.0.1:12345"])
+@pytest.mark.parametrize(
+    "host", ["evil.example:12345", "127.0.0.1:9999", "user@127.0.0.1:12345", "127.0.0.1:12345/path", " 127.0.0.1:12345"]
+)
 def test_foreign_authority_rejected_before_processing(handler, method, host):
     value = handler(method=method, host=host)
     getattr(value, "do_" + method)()
@@ -58,7 +60,9 @@ def test_foreign_authority_rejected_before_processing(handler, method, host):
     assert b"fixture-token" not in value.wfile.getvalue()
 
 
-@pytest.mark.parametrize("origin", ["null", "https://evil.example", "http://127.0.0.1:9999", "http://127.0.0.1:12345/path"])
+@pytest.mark.parametrize(
+    "origin", ["null", "https://evil.example", "http://127.0.0.1:9999", "http://127.0.0.1:12345/path"]
+)
 def test_foreign_or_malformed_origin_rejected(handler, origin):
     value = handler(origin=origin)
     value.do_GET()
