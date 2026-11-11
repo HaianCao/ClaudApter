@@ -21,7 +21,11 @@ def test_control_characters_rejected_without_changing_saved_key(tmp_path, monkey
     config = Config(path=tmp_path / "config.toml")
     store_token(config, "fixture", "synthetic-original")
     before = path.read_bytes()
-    token = {"start": character + "synthetic", "middle": "synthetic" + character + "key", "end": "synthetic" + character}[position]
+    token = {
+        "start": character + "synthetic",
+        "middle": "synthetic" + character + "key",
+        "end": "synthetic" + character,
+    }[position]
     with pytest.raises(ClaudapterError, match="control characters") as error:
         store_token(config, "fixture", token)
     assert "synthetic" not in str(error.value)

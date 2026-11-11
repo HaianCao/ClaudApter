@@ -20,10 +20,17 @@ def validate_gateway_limits(value, mode):
         valid = (
             (type(number) is int and number > 0)
             if key in COUNTS
-            else (not isinstance(number, bool) and isinstance(number, int | float) and math.isfinite(number) and number > 0)
+            else (
+                not isinstance(number, bool)
+                and isinstance(number, int | float)
+                and math.isfinite(number)
+                and number > 0
+            )
         )
         if not valid:
-            raise ClaudapterError("Gateway runtime limits must be finite positive numbers; byte/item/concurrency limits must be integers.")
+            raise ClaudapterError(
+                "Gateway runtime limits must be finite positive numbers; byte/item/concurrency limits must be integers."
+            )
     return dict(value)
 
 
@@ -60,10 +67,18 @@ def validate_gateway_runtime(value, mode):
         elif key in counts:
             valid = type(option) is int and option > 0 and (key != "retry_attempts" or option <= 4)
         else:
-            valid = not isinstance(option, bool) and isinstance(option, int | float) and math.isfinite(option) and option > 0
+            valid = (
+                not isinstance(option, bool)
+                and isinstance(option, int | float)
+                and math.isfinite(option)
+                and option > 0
+            )
         if not valid:
             raise ClaudapterError("Invalid gateway runtime policy value.")
-    if any(key in value for key in ("shared_requests", "shared_window", "shared_concurrency")) and "shared_admission_db" not in value:
+    if (
+        any(key in value for key in ("shared_requests", "shared_window", "shared_concurrency"))
+        and "shared_admission_db" not in value
+    ):
         raise ClaudapterError("Shared quota settings require a dedicated database path.")
     return dict(value)
 
@@ -77,7 +92,9 @@ def runtime_options(value, mode, config_file):
     for key in ("shared_admission_db", "provider_profiles_file", "catalog_policy_file"):
         if key in options:
             path = Path(options[key]).expanduser()
-            options[key] = str(path.resolve() if path.is_absolute() else (config_file.resolve().parent / path).resolve())
+            options[key] = str(
+                path.resolve() if path.is_absolute() else (config_file.resolve().parent / path).resolve()
+            )
     if "provider_profiles_file" in options:
         from protoverta.provider_profiles import ProviderProfiles
 

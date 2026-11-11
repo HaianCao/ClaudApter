@@ -59,7 +59,10 @@ def test_route_doctor_no_live_flag_never_invokes_provider(tmp_path):
     pytest.importorskip("protoverta")
     item = provider()
     config = Config(providers={"demo": item}, path=tmp_path / "config.toml")
-    with patch("claudapter.route_doctor._gateway", return_value=(object(), None)), patch("protoverta.certification.check_route") as checked:
+    with (
+        patch("claudapter.route_doctor._gateway", return_value=(object(), None)),
+        patch("protoverta.certification.check_route") as checked,
+    ):
         result = route_doctor(config, item, "m")
     checked.assert_not_called()
     assert result[0]["requests"] == 0 and not result[0]["passed"]

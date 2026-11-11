@@ -46,7 +46,10 @@ def upstream(mode):
                     self.wfile.write(body)
                 else:
                     self.send_response(200)
-                    self.send_header("Transfer-Encoding" if mode == "chunked" else "Content-Length", "chunked" if mode == "chunked" else "10000")
+                    self.send_header(
+                        "Transfer-Encoding" if mode == "chunked" else "Content-Length",
+                        "chunked" if mode == "chunked" else "10000",
+                    )
                     self.end_headers()
                     while not stopped.wait(0.02):
                         self.wfile.write(b"1\r\nx\r\n" if mode == "chunked" else b"x")

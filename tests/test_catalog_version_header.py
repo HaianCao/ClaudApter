@@ -54,8 +54,12 @@ def provider_server(protocol, auth, paginated):
         assert not worker.is_alive()
 
 
-CASES = [(protocol, "gateway", auth) for protocol in ("messages", "chat", "responses") for auth in ("bearer", "api_key")]
-CASES += [("responses" if CODEX else "messages", "direct", auth) for auth in (["bearer"] if CODEX else ["bearer", "api_key"])]
+CASES = [
+    (protocol, "gateway", auth) for protocol in ("messages", "chat", "responses") for auth in ("bearer", "api_key")
+]
+CASES += [
+    ("responses" if CODEX else "messages", "direct", auth) for auth in (["bearer"] if CODEX else ["bearer", "api_key"])
+]
 
 
 @pytest.mark.parametrize("protocol,mode,auth", CASES)
@@ -69,8 +73,14 @@ def test_selected_protocol_version_and_auth_reach_every_catalog_page(tmp_path, m
     monkeypatch.setenv("no_proxy", "127.0.0.1")
     # Both auth modes are independent of protocol; no key lookup is needed.
     with provider_server(protocol, auth, paginated=protocol == "messages") as (base, observed):
-        wire = {"messages": "anthropic_messages", "chat": "chat_completions", "responses": "responses"}[protocol] if CODEX else protocol
-        provider = configuration.Provider("fixture", "Fixture", base, protocol=wire, execution_mode=mode, auth_mode=auth)
+        wire = (
+            {"messages": "anthropic_messages", "chat": "chat_completions", "responses": "responses"}[protocol]
+            if CODEX
+            else protocol
+        )
+        provider = configuration.Provider(
+            "fixture", "Fixture", base, protocol=wire, execution_mode=mode, auth_mode=auth
+        )
         if CODEX:
             provider.discovery.enabled = True
         config = configuration.Config(providers={"fixture": provider}, path=tmp_path / "config.toml")

@@ -21,11 +21,18 @@ class LauncherTests(unittest.TestCase):
             with (
                 patch("claudapter.launcher.shutil.which", return_value="claude.exe"),
                 patch.dict(
-                    "os.environ", {"ANTHROPIC_API_KEY": "wrong", "ANTHROPIC_CUSTOM_HEADERS": "Authorization: Bearer wrong", "CLAUDE_CODE_USE_BEDROCK": "1"}
+                    "os.environ",
+                    {
+                        "ANTHROPIC_API_KEY": "wrong",
+                        "ANTHROPIC_CUSTOM_HEADERS": "Authorization: Bearer wrong",
+                        "CLAUDE_CODE_USE_BEDROCK": "1",
+                    },
                 ),
             ):
                 args, env = build_invocation(config, p, "claude-demo", "high", ["session-id"], "resume")
-            self.assertEqual(args, ["claude.exe", "--model", "claude-demo", "--effort", "high", "--resume", "session-id"])
+            self.assertEqual(
+                args, ["claude.exe", "--model", "claude-demo", "--effort", "high", "--resume", "session-id"]
+            )
             self.assertEqual(env["ANTHROPIC_BASE_URL"], "https://gateway.test")
             self.assertEqual(env["ANTHROPIC_AUTH_TOKEN"], "secret")
             self.assertNotIn("ANTHROPIC_API_KEY", env)
@@ -100,7 +107,15 @@ class LauncherTests(unittest.TestCase):
             snapshot.ModelSnapshot = lambda base, protocol, entries: (base, protocol, entries)
             snapshot.SnapshotModel = lambda mid, name: (mid, name)
             with (
-                patch.dict(sys.modules, {"protoverta": package, "protoverta.core": core, "protoverta.server": server, "protoverta.model_snapshot": snapshot}),
+                patch.dict(
+                    sys.modules,
+                    {
+                        "protoverta": package,
+                        "protoverta.core": core,
+                        "protoverta.server": server,
+                        "protoverta.model_snapshot": snapshot,
+                    },
+                ),
                 patch("claudapter.launcher.shutil.which", return_value="claude.exe"),
                 patch("claudapter.launcher.subprocess.run", return_value=types.SimpleNamespace(returncode=3)) as run,
             ):
@@ -119,7 +134,9 @@ def test_global_model_variables_are_explained_not_dropped():
 
     provider = Provider("demo", "Demo", "https://gateway.test")
     assert model_override_notice(provider, {}) is None
-    notice = model_override_notice(provider, {"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku", "CLAUDE_CODE_SUBAGENT_MODEL": "x"})
+    notice = model_override_notice(
+        provider, {"ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku", "CLAUDE_CODE_SUBAGENT_MODEL": "x"}
+    )
     assert "ANTHROPIC_DEFAULT_HAIKU_MODEL, CLAUDE_CODE_SUBAGENT_MODEL are set" in notice and "Demo" in notice
     custom = Provider("demo", "Demo", "https://gateway.test", agent_models={"policy": "selected"})
     assert model_override_notice(custom, {"ANTHROPIC_DEFAULT_HAIKU_MODEL": "x"}) is None

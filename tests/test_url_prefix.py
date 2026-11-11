@@ -13,7 +13,10 @@ def test_v1_is_appended_exactly_once_for_models_messages_and_cli(url):
     provider = Provider("demo", "Demo", url)
     assert _url(provider, "/v1/models") == "https://gateway.test/v1/models"
     assert _url(provider, "/v1/messages") == "https://gateway.test/v1/messages"
-    with patch("claudapter.launcher.shutil.which", return_value="claude.exe"), patch("claudapter.launcher.get_token", return_value="fixture"):
+    with (
+        patch("claudapter.launcher.shutil.which", return_value="claude.exe"),
+        patch("claudapter.launcher.get_token", return_value="fixture"),
+    ):
         _, env = build_invocation(Config(), provider, "m", "default", [])
     assert env["ANTHROPIC_BASE_URL"] == "https://gateway.test"
 

@@ -54,6 +54,8 @@ Windows supports native CLI executables and standard npm global or project insta
 
 ## Configure a provider
 
+<p align="center"><img src="docs/images/setup-page.png" width="820" alt="ClaudApter setup page with the OpenRouter preset selected"></p>
+
 In the setup page:
 
 1. Select **Add**. For **OpenRouter**, **NVIDIA NIM**, **TokenHarbor** or **AgentRouter**, pick it under *Start from a tested provider*; otherwise leave *Custom provider*.
@@ -65,6 +67,13 @@ In the setup page:
 The provider's name and ID come from its address; change them, the authentication or the connection mode under **Advanced: connection details** if you need to.
 
 ### How ClaudApter connects
+
+```mermaid
+flowchart LR
+    CLI["Claude Code"] -->|"Anthropic Messages"| GW["Protoverta gateway<br/>on 127.0.0.1"]
+    GW -->|"Responses, Chat Completions<br/>or Anthropic Messages"| P["Your provider"]
+    CLI -.->|"direct mode: Anthropic Messages only"| R["Local retry relay"] -.-> P
+```
 
 | | Local gateway (default) | Direct |
 |---|---|---|
@@ -104,7 +113,7 @@ win; leave them empty to use the reported maximums.
 
 How the gateway converts each protocol, its options and limits: [Protoverta documentation](https://haiancao.github.io/Protoverta/). Tested providers (OpenRouter, NVIDIA NIM, TokenHarbor, AgentRouter), their known limits and recommended settings: [provider compatibility](https://github.com/HaianCao/Protoverta/blob/main/docs/compatibility/providers.md).
 
-ClaudApter **0.2.0** installs [Protoverta](https://github.com/HaianCao/Protoverta) **0.3.0**; the installer verifies the gateway wheel's SHA-256 before installing it. Native Messages preserves beta headers and thinking/signature payloads. Chat and Responses translation supports text, URL/base64 user image inputs and client-side function tools, including streaming and multiple tool calls. Rich image tool results map Messages ↔ Responses; Chat routes and provider-owned file IDs remain unsupported. Public reasoning from Chat/Responses is not converted into fabricated Messages thinking/signatures.
+ClaudApter **0.3.0** installs [Protoverta](https://github.com/HaianCao/Protoverta) **0.4.0**; the installer verifies the gateway wheel's SHA-256 before installing it. Native Messages preserves beta headers and thinking/signature payloads. Chat and Responses translation supports text, URL/base64 user image inputs and client-side function tools, including streaming and multiple tool calls. Rich image tool results map Messages ↔ Responses; Chat routes and provider-owned file IDs remain unsupported. Public reasoning from Chat/Responses is not converted into fabricated Messages thinking/signatures.
 
 Under **Advanced: model compatibility checks**, you can select a local capability
 registry file and require verified capabilities. Relative paths start at the

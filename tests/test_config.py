@@ -42,7 +42,11 @@ class ConfigTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             config = Config(
-                {"demo": Provider("demo", "Demo", "https://example.test/api", "bearer", "m")}, "demo", "m", "default", Path(directory) / "config.toml"
+                {"demo": Provider("demo", "Demo", "https://example.test/api", "bearer", "m")},
+                "demo",
+                "m",
+                "default",
+                Path(directory) / "config.toml",
             )
             name = secret_var("demo")
             with patch.dict("os.environ", {name: "stale-key"}):
@@ -55,7 +59,11 @@ class ConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "config.toml"
             config = Config(
-                {"my_gateway": Provider("my_gateway", "My Gateway", "https://example.test/api", "api_key", "claude-demo")},
+                {
+                    "my_gateway": Provider(
+                        "my_gateway", "My Gateway", "https://example.test/api", "api_key", "claude-demo"
+                    )
+                },
                 "my_gateway",
                 "claude-demo",
                 "high",
@@ -94,7 +102,9 @@ class ConfigTests(unittest.TestCase):
     def test_gateway_choice_survives_config_round_trip(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "config.toml"
-            config = Config({"demo": Provider("demo", "Demo", "https://example.test", execution_mode="gateway")}, path=path)
+            config = Config(
+                {"demo": Provider("demo", "Demo", "https://example.test", execution_mode="gateway")}, path=path
+            )
             save(config)
             self.assertEqual(load(path).providers["demo"].execution_mode, "gateway")
 

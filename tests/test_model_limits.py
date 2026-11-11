@@ -8,17 +8,28 @@ from claudapter.errors import ClaudapterError
 
 
 def test_model_limits_validate_round_trip_and_map_to_claude_environment(tmp_path):
-    provider = Provider("demo", "Demo", "https://example.test", model_limits={"context_window": 128000, "max_output_tokens": 32000})
+    provider = Provider(
+        "demo", "Demo", "https://example.test", model_limits={"context_window": 128000, "max_output_tokens": 32000}
+    )
     config = Config({"demo": provider}, path=tmp_path / "config.toml")
     save(config)
     assert load(config.path).providers["demo"].model_limits == {"context_window": 128000, "max_output_tokens": 32000}
-    assert model_limit_environment(provider.model_limits) == {"CLAUDE_CODE_MAX_CONTEXT_TOKENS": "128000", "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000"}
+    assert model_limit_environment(provider.model_limits) == {
+        "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "128000",
+        "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000",
+    }
     assert model_limit_environment({}) == {}
 
 
 @pytest.mark.parametrize(
     "value",
-    [{"context_window": 0}, {"context_window": True}, {"context_window": "128000"}, {"other": 1}, {"context_window": 1000, "max_output_tokens": 1000}],
+    [
+        {"context_window": 0},
+        {"context_window": True},
+        {"context_window": "128000"},
+        {"other": 1},
+        {"context_window": 1000, "max_output_tokens": 1000},
+    ],
 )
 def test_invalid_model_limits_are_rejected(value):
     with pytest.raises(ClaudapterError):
@@ -48,21 +59,42 @@ def _cache_limits(monkeypatch, limits):
 def test_reported_limits_read_provider_fields_and_ignore_invalid_values():
     from claudapter.catalog import reported_limits
 
-    openrouter = {"id": "m", "context_length": 1_000_000, "top_provider": {"context_length": 1_000_000, "max_completion_tokens": 65536}}
+    openrouter = {
+        "id": "m",
+        "context_length": 1_000_000,
+        "top_provider": {"context_length": 1_000_000, "max_completion_tokens": 65536},
+    }
     assert reported_limits(openrouter) == {"context_window_tokens": 1_000_000, "max_output_tokens": 65536}
-    assert reported_limits({"id": "m", "context_length": 1_048_576}) == {"context_window_tokens": 1_048_576, "max_output_tokens": None}
+    assert reported_limits({"id": "m", "context_length": 1_048_576}) == {
+        "context_window_tokens": 1_048_576,
+        "max_output_tokens": None,
+    }
     assert reported_limits({"id": "m"}) == {"context_window_tokens": None, "max_output_tokens": None}
-    assert reported_limits({"context_length": "128000", "max_output_tokens": True}) == {"context_window_tokens": None, "max_output_tokens": None}
-    assert reported_limits({"context_window_tokens": 200000, "max_output_tokens": 8192}) == {"context_window_tokens": 200000, "max_output_tokens": 8192}
+    assert reported_limits({"context_length": "128000", "max_output_tokens": True}) == {
+        "context_window_tokens": None,
+        "max_output_tokens": None,
+    }
+    assert reported_limits({"context_window_tokens": 200000, "max_output_tokens": 8192}) == {
+        "context_window_tokens": 200000,
+        "max_output_tokens": 8192,
+    }
 
 
 def test_launch_limits_take_model_maximums_but_leave_room_for_input():
     from claudapter.catalog import launch_limits
 
-    assert launch_limits({"context_window_tokens": 1_000_000, "max_output_tokens": 65536}) == {"context_window": 1_000_000, "max_output_tokens": 65536}
+    assert launch_limits({"context_window_tokens": 1_000_000, "max_output_tokens": 65536}) == {
+        "context_window": 1_000_000,
+        "max_output_tokens": 65536,
+    }
     # An output maximum close to the whole window would leave no room for input.
-    assert launch_limits({"context_window_tokens": 1_048_576, "max_output_tokens": 943_718}) == {"context_window": 1_048_576, "max_output_tokens": 524_288}
-    assert launch_limits({"context_window_tokens": 1_048_576, "max_output_tokens": None}) == {"context_window": 1_048_576}
+    assert launch_limits({"context_window_tokens": 1_048_576, "max_output_tokens": 943_718}) == {
+        "context_window": 1_048_576,
+        "max_output_tokens": 524_288,
+    }
+    assert launch_limits({"context_window_tokens": 1_048_576, "max_output_tokens": None}) == {
+        "context_window": 1_048_576
+    }
     assert launch_limits({}) == {}
 
 
@@ -98,10 +130,15 @@ def test_direct_catalog_keeps_reported_limits_in_the_cache(tmp_path, monkeypatch
         catalog,
         "request_json",
         lambda *_args, **_kwargs: {
-            "data": [{"id": "vendor/model", "context_length": 262144, "top_provider": {"max_completion_tokens": 32768}}],
+            "data": [
+                {"id": "vendor/model", "context_length": 262144, "top_provider": {"max_completion_tokens": 32768}}
+            ],
             "has_more": False,
         },
     )
     catalog.fetch_models(config, provider)
-    assert catalog.cached_model_limits(config, provider, "vendor/model") == {"context_window_tokens": 262144, "max_output_tokens": 32768}
+    assert catalog.cached_model_limits(config, provider, "vendor/model") == {
+        "context_window_tokens": 262144,
+        "max_output_tokens": 32768,
+    }
     assert catalog.cached_model_limits(config, provider, "other/model") == {}

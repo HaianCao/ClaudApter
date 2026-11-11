@@ -43,7 +43,12 @@ def test_messages_registry_uses_actual_v1_prefix_and_config_relative_path(tmp_pa
         MESSAGES = "messages"
 
     provider = Provider(
-        "demo", "Demo", "https://example.test/api", execution_mode="gateway", capabilities_file="checks.json", require_verified_capabilities=True
+        "demo",
+        "Demo",
+        "https://example.test/api",
+        execution_mode="gateway",
+        capabilities_file="checks.json",
+        require_verified_capabilities=True,
     )
     config = Config({"demo": provider}, path=tmp_path / "config.toml")
     core = types.ModuleType("protoverta.core")
@@ -53,7 +58,9 @@ def test_messages_registry_uses_actual_v1_prefix_and_config_relative_path(tmp_pa
     capabilities = types.ModuleType("protoverta.capabilities")
     capabilities.CapabilityRegistry = Mock()
     with (
-        patch.dict(sys.modules, {"protoverta.core": core, "protoverta.server": server, "protoverta.capabilities": capabilities}),
+        patch.dict(
+            sys.modules, {"protoverta.core": core, "protoverta.server": server, "protoverta.capabilities": capabilities}
+        ),
         patch("claudapter.launcher.get_token", return_value="fixture-key"),
     ):
         _gateway(config, provider)

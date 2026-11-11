@@ -47,7 +47,11 @@ class SetupRequestHandler(BaseHTTPRequestHandler):
         now = time.monotonic()
         self._input_end = now + self.input_timeout
         self.rfile.close()
-        self._deadline_input = _InputDeadline(self.connection.makefile("rb", buffering=0), self.connection, min(self._input_end, now + self.header_timeout))
+        self._deadline_input = _InputDeadline(
+            self.connection.makefile("rb", buffering=0),
+            self.connection,
+            min(self._input_end, now + self.header_timeout),
+        )
         self.rfile = io.BufferedReader(self._deadline_input)
 
     def parse_request(self):

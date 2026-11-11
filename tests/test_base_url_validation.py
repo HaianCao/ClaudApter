@@ -30,7 +30,9 @@ def test_invalid_url_is_rejected_without_overwriting_config(tmp_path, value):
     with pytest.raises(ClaudapterError):
         validate_base_url(value)
     path = tmp_path / "config.toml"
-    original = f'schema_version = 1\n[[providers]]\nid="fixture"\ndisplay_name="Fixture"\nbase_url={json.dumps(value)}\n'
+    original = (
+        f'schema_version = 1\n[[providers]]\nid="fixture"\ndisplay_name="Fixture"\nbase_url={json.dumps(value)}\n'
+    )
     path.write_text(original)
     with pytest.raises(ClaudapterError):
         load(path)
@@ -40,7 +42,13 @@ def test_invalid_url_is_rejected_without_overwriting_config(tmp_path, value):
 
 
 @pytest.mark.parametrize(
-    "value", ["https://example.test:1/v1", "https://example.test:65535/api/v1", "https://example.test/encoded%20path/v1", "http://[::1]:12345/v1"]
+    "value",
+    [
+        "https://example.test:1/v1",
+        "https://example.test:65535/api/v1",
+        "https://example.test/encoded%20path/v1",
+        "http://[::1]:12345/v1",
+    ],
 )
 def test_valid_ports_encoded_paths_and_ipv6_are_preserved(value):
     assert validate_base_url(value) == value

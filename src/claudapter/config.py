@@ -14,6 +14,7 @@ except ImportError:  # A broken install must still open the setup page.
     RetryPolicy = None  # type: ignore[assignment,misc]
 
 from .errors import ClaudapterError
+from .provider_url import normalize_base_url
 from .toml_text import toml_value
 
 
@@ -72,7 +73,9 @@ class Config:
 def retry_policy(config: Config):
     """The session's error-class retry policy (Protoverta ``RetryPolicy``)."""
     if RetryPolicy is None:
-        raise ClaudapterError("ClaudApter's Protoverta component is missing or broken. Run the installer command again to repair it.")
+        raise ClaudapterError(
+            "ClaudApter's Protoverta component is missing or broken. Run the installer command again to repair it."
+        )
     try:
         return RetryPolicy.from_mapping(config.retry)
     except ValueError as exc:
@@ -84,7 +87,9 @@ EFFORTS = {"default", "low", "medium", "high", "xhigh", "max"}
 
 def validate_capability_settings(path, required, mode):
     if not isinstance(path, str) or "\0" in path or not isinstance(required, bool):
-        raise ClaudapterError("Capability registry path must be text and require_verified_capabilities must be boolean.")
+        raise ClaudapterError(
+            "Capability registry path must be text and require_verified_capabilities must be boolean."
+        )
     path = path.strip()
     if (path or required) and mode != "gateway":
         raise ClaudapterError("Capability checks require gateway mode.")
@@ -131,30 +136,10 @@ def secret_var(provider_id: str) -> str:
 
 def validate_base_url(value: str, protocol: str = "messages") -> str:
     _text(value, "base_url", required=True)
-    if any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in value):
-        raise ClaudapterError("Base URL must not contain whitespace or control characters.")
-    value = value.strip().rstrip("/")
     try:
-        parsed = urlsplit(value)
-        hostname = parsed.hostname
-        port = parsed.port
+        return normalize_base_url(value)
     except ValueError as exc:
-        raise ClaudapterError("Base URL has an invalid host or port.") from exc
-    local_http = parsed.scheme == "http" and hostname in {"127.0.0.1", "localhost", "::1"}
-    if (
-        re.search(r"\s", value)
-        or (parsed.scheme != "https" and not local_http)
-        or not hostname
-        or parsed.username is not None
-        or parsed.password is not None
-        or parsed.query
-        or parsed.fragment
-        or (port is not None and port < 1)
-    ):
-        raise ClaudapterError("Base URL must use HTTPS (or loopback HTTP) without credentials, query or fragment.")
-    if parsed.path.endswith(("/messages", "/responses", "/chat/completions")):
-        raise ClaudapterError("Enter the base URL, for example https://provider.example/v1, without the endpoint suffix.")
-    return value
+        raise ClaudapterError(str(exc)) from None
 
 
 def claude_base_url(value: str) -> str:
@@ -180,7 +165,16 @@ def validate(config: Config) -> None:
         validate_provider_id(provider_id)
         if not isinstance(provider, Provider):
             raise ClaudapterError("Each configured provider must be a Provider object.")
-        for field_name in ("id", "display_name", "base_url", "auth_mode", "default_model", "execution_mode", "protocol", "upstream_reasoning"):
+        for field_name in (
+            "id",
+            "display_name",
+            "base_url",
+            "auth_mode",
+            "default_model",
+            "execution_mode",
+            "protocol",
+            "upstream_reasoning",
+        ):
             _text(getattr(provider, field_name), "provider." + field_name, required=field_name != "default_model")
         from .gateway_options import validate_gateway_limits
 
@@ -189,7 +183,9 @@ def validate(config: Config) -> None:
 
         validate_agent_models(provider.agent_models)
         validate_model_limits(provider.model_limits)
-        validate_capability_settings(provider.capabilities_file, provider.require_verified_capabilities, provider.execution_mode)
+        validate_capability_settings(
+            provider.capabilities_file, provider.require_verified_capabilities, provider.execution_mode
+        )
         if provider.id != provider_id or not provider.display_name.strip():
             raise ClaudapterError(f"Invalid provider: {provider_id}")
         if provider.protocol not in {"messages", "chat", "responses"}:
@@ -246,7 +242,14 @@ def load(path: Path | None = None) -> Config:
         retry = raw.get("retry", {})
         if not isinstance(retry, dict):
             raise ClaudapterError("[retry] must be a TOML table.")
-        config = Config(providers, defaults.get("provider", ""), defaults.get("model", ""), defaults.get("effort", "default"), path, retry)
+        config = Config(
+            providers,
+            defaults.get("provider", ""),
+            defaults.get("model", ""),
+            defaults.get("effort", "default"),
+            path,
+            retry,
+        )
         validate(config)
         return config
     except (OSError, UnicodeError, tomllib.TOMLDecodeError, TypeError, KeyError, ValueError) as exc:
@@ -269,11 +272,27 @@ def save(config: Config) -> None:
         lines += ["", "[retry]"] + [f"{key} = {toml_value(config.retry[key])}" for key in sorted(config.retry)]
     for provider in config.providers.values():
         lines += ["", "[[providers]]"]
-        for name in ("id", "display_name", "base_url", "auth_mode", "default_model", "execution_mode", "protocol", "upstream_reasoning"):
+        for name in (
+            "id",
+            "display_name",
+            "base_url",
+            "auth_mode",
+            "default_model",
+            "execution_mode",
+            "protocol",
+            "upstream_reasoning",
+        ):
             lines.append(f"{name} = {toml_value(getattr(provider, name))}")
-        registry_path, required = validate_capability_settings(provider.capabilities_file, provider.require_verified_capabilities, provider.execution_mode)
+        registry_path, required = validate_capability_settings(
+            provider.capabilities_file, provider.require_verified_capabilities, provider.execution_mode
+        )
         if registry_path:
-            lines.extend([f"capabilities_file = {toml_value(registry_path)}", f"require_verified_capabilities = {str(required).lower()}"])
+            lines.extend(
+                [
+                    f"capabilities_file = {toml_value(registry_path)}",
+                    f"require_verified_capabilities = {str(required).lower()}",
+                ]
+            )
         if provider.gateway_limits:
             from .gateway_options import limits_toml
 
@@ -292,7 +311,9 @@ def save(config: Config) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, prefix=".config-", suffix=".tmp", delete=False) as stream:
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", dir=path.parent, prefix=".config-", suffix=".tmp", delete=False
+        ) as stream:
             temporary = Path(stream.name)
             stream.write("\n".join(lines) + "\n")
         os.replace(temporary, path)

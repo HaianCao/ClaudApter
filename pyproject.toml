@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "claudapter"
-version = "0.2.0"
+version = "0.3.0"
 description = "A local provider setup studio and launcher for Claude Code"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 # The local gateway is part of every install (direct mode stays available).
-dependencies = ["protoverta==0.3.0"]
+dependencies = ["protoverta==0.4.0"]
 authors = [{ name = "HaianCao", email = "caohaian2005@gmail.com" }]
 keywords = ["claude-code", "claude", "anthropic", "llm", "launcher", "openrouter", "gateway"]
 classifiers = [
@@ -35,7 +35,7 @@ Issues = "https://github.com/HaianCao/ClaudApter/issues"
 Changelog = "https://github.com/HaianCao/ClaudApter/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-test = ["pytest>=8", "ruff==0.17.2"]
+test = ["pytest>=8", "ruff==0.17.2", "mypy==2.4.0"]
 # Kept so older install commands that request the extra keep working.
 gateway = []
 
@@ -55,9 +55,18 @@ packages = ["src/claudapter"]
 [tool.hatch.build.targets.sdist]
 include = ["/src", "/assets", "/tests", "/configs", "/scripts", "/pyproject.toml", "/README.md", "/LICENSE", "/CHANGELOG.md"]
 
+[tool.mypy]
+# Basic gate: every function body is checked; strict annotations come with
+# the shared launcher package.
+python_version = "3.11"
+files = ["src/claudapter"]
+check_untyped_defs = true
+warn_unused_ignores = true
+show_error_codes = true
+
 [tool.ruff]
 # Formatter width; long literals that cannot wrap are left as written.
-line-length = 160
+line-length = 120
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

@@ -11,7 +11,14 @@ from claudapter.launcher import _gateway
 
 @pytest.mark.parametrize(
     "value",
-    [{"unknown": 1}, {"shared_requests": 10}, {"retry_attempts": 5}, {"retry_attempts": True}, {"shared_admission_db": ""}, {"shared_window": float("nan")}],
+    [
+        {"unknown": 1},
+        {"shared_requests": 10},
+        {"retry_attempts": 5},
+        {"retry_attempts": True},
+        {"shared_admission_db": ""},
+        {"shared_window": float("nan")},
+    ],
 )
 def test_invalid_runtime_policies_are_rejected(value):
     with pytest.raises(ClaudapterError):

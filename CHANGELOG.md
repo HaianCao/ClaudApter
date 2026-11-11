@@ -3,6 +3,25 @@
 All notable changes to ClaudApter are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-11-11
+
+Requires Protoverta 0.4.0; the installer pins and verifies its wheel.
+
+### Changed
+- Gateway model discovery skips catalog entries the provider reports with
+  invalid data instead of failing, and says how many it skipped. Malformed
+  token limits are dropped rather than retried without limits.
+- Error messages and setup hints no longer mention a "preview" core.
+- README: setup page screenshot and a connection diagram.
+- Base URL rules and the loopback proxy bypass live in one module shared
+  verbatim with the other launcher (checked for drift in CI). Invalid base
+  URLs now get a message naming the exact problem.
+- Type-checked with mypy in CI; the deadline transport keeps its own TLS
+  context instead of reading a private `urllib` attribute.
+
+### Removed
+- Fallbacks for Protoverta builds older than the pinned version.
+
 ## [0.2.0] - 2026-11-10
 
 Merges the gateway preview into `main`.

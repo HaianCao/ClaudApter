@@ -25,7 +25,11 @@ def test_refresh_is_unlocked_and_late_cache_is_identity_checked(tmp_path, monkey
     results, snapshots = [], []
 
     def fetch(config, provider, *, cache_sink, budget, token):
-        identity = catalog._identity(provider, config, token=token) if codex else catalog._identity(config, provider, token=token)
+        identity = (
+            catalog._identity(provider, config, token=token)
+            if codex
+            else catalog._identity(config, provider, token=token)
+        )
         snapshots.append((provider.base_url, token))
         started.set()
         while not release.wait(0.02):
@@ -47,10 +51,18 @@ def test_refresh_is_unlocked_and_late_cache_is_identity_checked(tmp_path, monkey
         listener(tmp_path, monkeypatch) as (_, url, session, _),
     ):
         origin = f"http://{url.netloc}"
-        headers = {"Content-Type": "application/json", "X-Codex-Apter-Token" if codex else "X-Claudapter-Token": session}
+        headers = {
+            "Content-Type": "application/json",
+            "X-Codex-Apter-Token" if codex else "X-Claudapter-Token": session,
+        }
 
         def call(path, body=None, method=None):
-            req = Request(origin + path, data=json.dumps(body).encode() if body is not None else None, headers=headers, method=method)
+            req = Request(
+                origin + path,
+                data=json.dumps(body).encode() if body is not None else None,
+                headers=headers,
+                method=method,
+            )
             try:
                 with urlopen(req, timeout=2) as response:
                     return response.status, json.load(response)
@@ -60,7 +72,13 @@ def test_refresh_is_unlocked_and_late_cache_is_identity_checked(tmp_path, monkey
             except (OSError, URLError):
                 return None, None  # Run may close the setup socket after cancel.
 
-        body = {"id": "fixture", "display_name": "Fixture", "base_url": "https://old.test/v1", "api_key": "synthetic-original", "execution_mode": "direct"}
+        body = {
+            "id": "fixture",
+            "display_name": "Fixture",
+            "base_url": "https://old.test/v1",
+            "api_key": "synthetic-original",
+            "execution_mode": "direct",
+        }
         assert call("/api/provider", body)[0] == 200
         worker = threading.Thread(target=lambda: results.append(call("/api/models/refresh", {"provider": "fixture"})))
         worker.start()
@@ -84,7 +102,11 @@ def test_refresh_is_unlocked_and_late_cache_is_identity_checked(tmp_path, monkey
                 with (tmp_path / "config.toml").open("a") as file:
                     file.write("\n# changed elsewhere\n")
             else:
-                selection = {"provider": "fixture", "model": "manual", "reasoning" if codex else "effort": "medium" if codex else "default"}
+                selection = {
+                    "provider": "fixture",
+                    "model": "manual",
+                    "reasoning" if codex else "effort": "medium" if codex else "default",
+                }
                 assert call("/api/" + change, selection)[0] == 200
             release.set()
             worker.join(3)

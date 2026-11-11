@@ -10,7 +10,9 @@ def validate_report(path: Path, *, allow_skips: bool = False) -> int:
     skipped = [case for case in cases if case.find("skipped") is not None]
     failed = [case for case in cases if any(case.find(tag) is not None for tag in ("failure", "error"))]
     if not cases or len(skipped) == len(cases) or failed or (skipped and not allow_skips):
-        raise ValueError(f"Invalid test evidence: {len(cases)} cases, {len(skipped)} skipped, {len(failed)} failed; gateway jobs permit no skips")
+        raise ValueError(
+            f"Invalid test evidence: {len(cases)} cases, {len(skipped)} skipped, {len(failed)} failed; gateway jobs permit no skips"
+        )
     return len(cases)
 
 

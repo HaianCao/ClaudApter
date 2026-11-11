@@ -2,6 +2,7 @@
 
 import hashlib
 import os
+import sys
 import tempfile
 import time
 from contextlib import contextmanager
@@ -52,7 +53,7 @@ class SettingsGuard:
                 while not acquired:
                     try:
                         stream.seek(0)
-                        if os.name == "nt":
+                        if sys.platform == "win32":
                             import msvcrt
 
                             msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
@@ -72,7 +73,7 @@ class SettingsGuard:
             finally:
                 if acquired:
                     stream.seek(0)
-                    if os.name == "nt":
+                    if sys.platform == "win32":
                         import msvcrt
 
                         msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)

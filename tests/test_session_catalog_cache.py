@@ -26,7 +26,13 @@ def test_cache_enrichment_is_read_only_and_never_adds_model_ids(tmp_path, monkey
         entry["identity"]["base_url"] = "https://other.test/v1"
     if change == "bad_name":
         entry["models"][0]["display_name"] = "bad\nname"
-    raw = "invalid" if change == "invalid" else " " * (8 * 1024 * 1024 + 1) if change == "oversize" else json.dumps({"p": entry})
+    raw = (
+        "invalid"
+        if change == "invalid"
+        else " " * (8 * 1024 * 1024 + 1)
+        if change == "oversize"
+        else json.dumps({"p": entry})
+    )
     path.write_text(raw, encoding="utf-8")
     result = cached_model_names(config, provider, ("a",), token="changed" if change == "credential" else "synthetic")
     assert result == ({"a": "Friendly"} if change == "fresh" else {})

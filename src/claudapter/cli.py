@@ -17,7 +17,9 @@ def _provider(config: Config, provider_id: str):
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="claude-ca", description="ClaudApter — configure providers and launch Claude Code")
+    parser = argparse.ArgumentParser(
+        prog="claude-ca", description="ClaudApter — configure providers and launch Claude Code"
+    )
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("setup", help="Open the local configuration page")
     for name in ("run", "print", "resume", "continue"):
@@ -32,8 +34,14 @@ def main(argv: list[str] | None = None) -> int:
     doctor = sub.add_parser("doctor", help="Probe an Anthropic Messages endpoint (may incur API cost)")
     doctor.add_argument("-p", "--provider", required=True)
     doctor.add_argument("-m", "--model", required=True)
-    doctor.add_argument("--allow-live", action="store_true", help="Allow bounded provider route checks (may incur cost)")
-    doctor.add_argument("--check", action="append", choices=["text", "streaming", "tools", "streaming_tools", "tool_result", "history_replay"])
+    doctor.add_argument(
+        "--allow-live", action="store_true", help="Allow bounded provider route checks (may incur cost)"
+    )
+    doctor.add_argument(
+        "--check",
+        action="append",
+        choices=["text", "streaming", "tools", "streaming_tools", "tool_result", "history_replay"],
+    )
     doctor.add_argument("--report", help="Write positive route evidence to a new JSON file")
     sub.add_parser("validate", help="Validate ClaudApter configuration")
     args = parser.parse_args(argv)
@@ -44,7 +52,10 @@ def main(argv: list[str] | None = None) -> int:
             from .web import serve
 
             if first_run:
-                print("No provider is set up yet. Opening ClaudApter setup: add your endpoint and API key there.", file=sys.stderr)
+                print(
+                    "No provider is set up yet. Opening ClaudApter setup: add your endpoint and API key there.",
+                    file=sys.stderr,
+                )
             return serve(config)
         if args.command == "validate":
             print("Configuration is valid.")
@@ -62,7 +73,9 @@ def main(argv: list[str] | None = None) -> int:
             if provider.execution_mode == "gateway" or args.check or args.report:
                 from .route_doctor import route_doctor
 
-                checks = route_doctor(config, provider, args.model, allow_live=args.allow_live, checks=args.check, report=args.report)
+                checks = route_doctor(
+                    config, provider, args.model, allow_live=args.allow_live, checks=args.check, report=args.report
+                )
                 for item in checks:
                     print(f"{item['case']}: {item['outcome']} ({item['requests']} requests, {item['duration_ms']} ms)")
                 return 0 if all(item["passed"] for item in checks) else 1

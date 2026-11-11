@@ -94,7 +94,18 @@ Write-Output ('RESULT:' + ($result | ConvertTo-Json -Depth 4 -Compress))
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows uninstaller")
 @pytest.mark.parametrize(
-    "scenario", ["keep", "reset", "no_path", "no_matches", "interactive_keep", "interactive_reset", "interactive_delete", "cancel", "blocked_delete"]
+    "scenario",
+    [
+        "keep",
+        "reset",
+        "no_path",
+        "no_matches",
+        "interactive_keep",
+        "interactive_reset",
+        "interactive_delete",
+        "cancel",
+        "blocked_delete",
+    ],
 )
 def test_uninstall_choices_are_scoped_and_independent(tmp_path, scenario):
     script = Path(__file__).resolve().parents[1] / "scripts" / "uninstall.ps1"
@@ -141,7 +152,9 @@ def test_uninstall_choices_are_scoped_and_independent(tmp_path, scenario):
             assert report["user_path"] == r"C:\Keep"
             assert report["process_path"] == r"C:\ProcessKeep"
         assert all(
-            write["Scope"] != "Machine" and write["Name"] in {"Path", PREFIX + "_CONFIG", PREFIX + "_CACHE", PREFIX + "_ENV_FILE", PREFIX + "_MCP_CONFIG"}
+            write["Scope"] != "Machine"
+            and write["Name"]
+            in {"Path", PREFIX + "_CONFIG", PREFIX + "_CACHE", PREFIX + "_ENV_FILE", PREFIX + "_MCP_CONFIG"}
             for write in report["writes"]
         )
         if scenario == "no_matches":

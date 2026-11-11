@@ -14,7 +14,9 @@ def _model(value):
         or value.lower().removesuffix("[1m]") in _ALIASES
         or any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in value)
     ):
-        raise ClaudapterError("Agent model must be an exact model ID (1–512 characters), not a Claude family alias or whitespace.")
+        raise ClaudapterError(
+            "Agent model must be an exact model ID (1–512 characters), not a Claude family alias or whitespace."
+        )
     try:
         value.encode("utf-8")
     except UnicodeError:
@@ -24,7 +26,9 @@ def _model(value):
 
 def validate_agent_models(value):
     if not isinstance(value, dict) or set(value) - {"policy", "default", *ROLES}:
-        raise ClaudapterError("agent_models accepts policy, default, haiku, sonnet, opus and fable only; agent-only effort is not available here.")
+        raise ClaudapterError(
+            "agent_models accepts policy, default, haiku, sonnet, opus and fable only; agent-only effort is not available here."
+        )
     policy = value.get("policy", "inherit")
     if policy not in ("inherit", "selected", "custom"):
         raise ClaudapterError("Agent model policy must be inherit, selected or custom.")
@@ -56,4 +60,8 @@ def agent_environment(prefix, options, model):
 def agent_models_toml(options):
     from .toml_text import toml_value
 
-    return "{ " + ", ".join(f"{key} = {toml_value(value)}" for key, value in sorted(validate_agent_models(options).items())) + " }"
+    return (
+        "{ "
+        + ", ".join(f"{key} = {toml_value(value)}" for key, value in sorted(validate_agent_models(options).items()))
+        + " }"
+    )

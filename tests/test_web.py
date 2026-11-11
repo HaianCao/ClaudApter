@@ -86,7 +86,9 @@ class WebTests(unittest.TestCase):
                         urlopen(url.split("?", 1)[0] + "api/diagnostics?provider=demo", timeout=5)
                     self.assertEqual(unauthorized.exception.code, 403)
                     unauthorized.exception.close()
-                    diagnostic_request = Request(url.split("?", 1)[0] + "api/diagnostics?provider=demo", headers={"X-Claudapter-Token": token})
+                    diagnostic_request = Request(
+                        url.split("?", 1)[0] + "api/diagnostics?provider=demo", headers={"X-Claudapter-Token": token}
+                    )
                     with urlopen(diagnostic_request, timeout=5) as response:
                         self.assertEqual(json.load(response), {"records": [], "enabled": False})
                     agent_policy = {"policy": "custom", "default": "fixture-worker", "haiku": "fixture-fast"}
@@ -102,18 +104,31 @@ class WebTests(unittest.TestCase):
                         edit = Request(
                             url.split("?", 1)[0] + "api/provider",
                             data=json.dumps(
-                                {"id": "demo", "display_name": "Demo renamed", "base_url": "https://gateway.test", "execution_mode": "gateway", **extra_fields}
+                                {
+                                    "id": "demo",
+                                    "display_name": "Demo renamed",
+                                    "base_url": "https://gateway.test",
+                                    "execution_mode": "gateway",
+                                    **extra_fields,
+                                }
                             ).encode(),
                             headers={"Content-Type": "application/json", "X-Claudapter-Token": token},
                             method="POST",
                         )
                         with urlopen(edit, timeout=5) as response:
-                            self.assertEqual(json.load(response)["providers"][0]["upstream_reasoning"], "openrouter_disabled")
+                            self.assertEqual(
+                                json.load(response)["providers"][0]["upstream_reasoning"], "openrouter_disabled"
+                            )
                         self.assertEqual(load(config.path).providers["demo"].upstream_reasoning, "openrouter_disabled")
                         self.assertEqual(load(config.path).providers["demo"].capabilities_file, "checks.json")
                         self.assertTrue(load(config.path).providers["demo"].require_verified_capabilities)
                         self.assertEqual(load(config.path).providers["demo"].agent_models, agent_policy)
-                    for name in ("ClaudApter_black.png", "ClaudApter_white.png", "ClaudApter_black_icon.png", "ClaudApter_white_icon.png"):
+                    for name in (
+                        "ClaudApter_black.png",
+                        "ClaudApter_white.png",
+                        "ClaudApter_black_icon.png",
+                        "ClaudApter_white_icon.png",
+                    ):
                         with urlopen(url.split("?", 1)[0] + "assets/" + name, timeout=5) as asset:
                             self.assertEqual(asset.headers.get("Content-Type"), "image/png")
                             self.assertEqual(asset.read(8), b"\x89PNG\r\n\x1a\n")

@@ -16,7 +16,9 @@ from claudapter.web import public_config
 
 @pytest.mark.parametrize("protocol", ["chat", "responses"])
 def test_cross_protocol_config_and_catalog(tmp_path, protocol):
-    provider = Provider("demo", "My provider", "https://example.test/api/v4", execution_mode="gateway", protocol=protocol)
+    provider = Provider(
+        "demo", "My provider", "https://example.test/api/v4", execution_mode="gateway", protocol=protocol
+    )
     config = Config({"demo": provider}, path=tmp_path / "config.toml")
     save(config)
     assert load(config.path).providers["demo"] == provider
@@ -30,9 +32,14 @@ def test_cross_protocol_config_and_catalog(tmp_path, protocol):
 def test_cross_protocol_launcher_settings_are_child_only(tmp_path):
     provider = Provider("demo", "Demo", "https://example.test/v1", execution_mode="gateway", protocol="chat")
     config = Config({"demo": provider}, path=tmp_path / "config.toml")
-    with patch("claudapter.launcher.shutil.which", return_value="claude.exe"), patch("claudapter.launcher.get_token", return_value="secret"):
+    with (
+        patch("claudapter.launcher.shutil.which", return_value="claude.exe"),
+        patch("claudapter.launcher.get_token", return_value="secret"),
+    ):
         before = dict(os.environ)
-        args, env = build_invocation(config, provider, "m", "high", [], gateway_url="http://127.0.0.1:8765", gateway_token="local")
+        args, env = build_invocation(
+            config, provider, "m", "high", [], gateway_url="http://127.0.0.1:8765", gateway_token="local"
+        )
         assert os.environ == before
         assert env["MAX_THINKING_TOKENS"] == "0"
         assert env["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"] == "1"
@@ -51,7 +58,9 @@ def test_cross_protocol_launcher_settings_are_child_only(tmp_path):
         )
         assert "maxEffortLevel" not in " ".join(native_args)
         with pytest.raises(ClaudapterError, match="effort"):
-            build_invocation(config, provider, "m", "max", [], gateway_url="http://127.0.0.1:8765", gateway_token="local")
+            build_invocation(
+                config, provider, "m", "max", [], gateway_url="http://127.0.0.1:8765", gateway_token="local"
+            )
 
 
 def test_loopback_proxy_bypass_does_not_change_parent_or_direct_mode(tmp_path):
@@ -60,10 +69,16 @@ def test_loopback_proxy_bypass_does_not_change_parent_or_direct_mode(tmp_path):
     with (
         patch("claudapter.launcher.shutil.which", return_value="claude.exe"),
         patch("claudapter.launcher.get_token", return_value="secret"),
-        patch.dict(os.environ, {"NO_PROXY": "internal.test, other.test, localhost", "HTTPS_PROXY": "http://proxy.test:8080"}, clear=True),
+        patch.dict(
+            os.environ,
+            {"NO_PROXY": "internal.test, other.test, localhost", "HTTPS_PROXY": "http://proxy.test:8080"},
+            clear=True,
+        ),
     ):
         before = dict(os.environ)
-        _args, env = build_invocation(config, provider, "m", "default", [], gateway_url="http://127.0.0.1:8765", gateway_token="local")
+        _args, env = build_invocation(
+            config, provider, "m", "default", [], gateway_url="http://127.0.0.1:8765", gateway_token="local"
+        )
         assert dict(os.environ) == before
         assert env["NO_PROXY"] == env["no_proxy"]
         assert {"internal.test", "other.test", "localhost", "127.0.0.1", "::1"} <= set(env["NO_PROXY"].split(","))
@@ -93,7 +108,10 @@ def test_gateway_passes_explicit_prefix_and_compatibility_policy(tmp_path, proto
     server.GatewayConfig, server.gateway_session = gateway_config, lambda value: value
     provider = Provider("demo", "Demo", "https://example.test" + prefix, execution_mode="gateway", protocol=protocol)
     config = Config({"demo": provider}, path=tmp_path / "config.toml")
-    with patch.dict(sys.modules, {"protoverta.core": core, "protoverta.server": server}), patch("claudapter.launcher.get_token", return_value="secret"):
+    with (
+        patch.dict(sys.modules, {"protoverta.core": core, "protoverta.server": server}),
+        patch("claudapter.launcher.get_token", return_value="secret"),
+    ):
         _gateway(config, provider)
     expected = "https://example.test" + prefix.rstrip("/")
     if protocol == "messages" and not expected.endswith("/v1"):
