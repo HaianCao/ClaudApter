@@ -16,8 +16,7 @@ def test_installer_pins_the_dependency_version_and_a_hash():
     assert version == pinned
     # A released installer carries the SHA-256 of the published wheel; an
     # unreleased build refuses to download anything unverified.
-    # PENDING-RELEASE until the matching Protoverta release exists; the release workflow refuses it.
-    assert re.fullmatch(r"[0-9a-f]{64}", digest) or digest == "PENDING-RELEASE"
+    assert re.fullmatch(r"[0-9a-f]{64}", digest)
 
 
 def test_remote_install_downloads_the_release_tag_of_this_version():
