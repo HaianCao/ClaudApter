@@ -3,7 +3,9 @@
 All notable changes to ClaudApter are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.3.1] - 2026-11-11
+
+Still uses Protoverta 0.4.0.
 
 ### Added
 - Linux and macOS support: `scripts/install.sh` / `scripts/uninstall.sh` install
