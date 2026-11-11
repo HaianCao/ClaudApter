@@ -98,11 +98,18 @@ def validate_capability_settings(path, required, mode):
     return path, required
 
 
+def _xdg_home(variable: str, default: str) -> Path:
+    """An XDG base directory (Linux/macOS); relative values are ignored as the spec requires."""
+    value = os.environ.get(variable, "")
+    return Path(value) if value and os.path.isabs(value) else Path.home() / default
+
+
 def config_path() -> Path:
     override = os.environ.get("CLAUDE_CA_CONFIG")
     if override:
         return Path(override).expanduser().resolve()
-    root = Path(os.environ.get("APPDATA", Path.home() / ".config"))
+    appdata = os.environ.get("APPDATA")
+    root = Path(appdata) if appdata else _xdg_home("XDG_CONFIG_HOME", ".config")
     return root / "claudapter" / "config.toml"
 
 
@@ -112,7 +119,8 @@ def cache_path(config: Config | None = None) -> Path:
         return Path(override).expanduser().resolve()
     if config and config.path and config.path != config_path():
         return config.path.with_name("models-cache.json")
-    root = Path(os.environ.get("LOCALAPPDATA", Path.home() / ".cache"))
+    local = os.environ.get("LOCALAPPDATA")
+    root = Path(local) if local else _xdg_home("XDG_CACHE_HOME", ".cache")
     return root / "claudapter" / "models.json"
 
 

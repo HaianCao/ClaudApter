@@ -104,3 +104,47 @@ jobs:
           & .\scripts\uninstall.ps1 -NonInteractive
           if ($LASTEXITCODE -ne 0) { throw 'Uninstall failed' }
           if (Test-Path -LiteralPath $launcher) { throw 'claude-ca launcher was not removed' }
+
+  test-unix:
+    # Linux and macOS: tests, types and the install.sh/uninstall.sh lifecycle.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ['3.11', '3.13']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Install the pinned Protoverta wheel
+        run: python -m pip install https://github.com/HaianCao/Protoverta/releases/download/v0.4.0/protoverta-0.4.0-py3-none-any.whl
+      - name: Install package and test dependencies
+        run: python -m pip install -e ".[test]"
+      - name: Run Python tests
+        run: python -m pytest
+      - name: Type check
+        run: python -m mypy
+      - name: Check shell scripts
+        run: |
+          bash -n scripts/install.sh
+          bash -n scripts/uninstall.sh
+          if command -v shellcheck > /dev/null; then shellcheck -S warning scripts/install.sh scripts/uninstall.sh; fi
+      - name: Smoke-test install, update and uninstall
+        run: |
+          set -euo pipefail
+          root="$HOME/.local/share/claude-ca"
+          bash scripts/install.sh --non-interactive --skip-cli-install --no-path-changes
+          "$HOME/.local/bin/claude-ca" --help > /dev/null
+          "$root/environments/$(cat "$root/current.txt")/bin/python" -c "import importlib.metadata as m, protoverta.server; assert m.version('protoverta') == '0.4.0'"
+          bash scripts/install.sh --non-interactive --skip-cli-install --no-path-changes
+          bash scripts/install.sh --non-interactive --skip-cli-install --no-path-changes
+          test "$(find "$root/environments" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" = 2
+          bash scripts/uninstall.sh --non-interactive --no-path-changes
+          test ! -e "$HOME/.local/bin/claude-ca"
+          test ! -e "$root"

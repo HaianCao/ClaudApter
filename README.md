@@ -8,7 +8,7 @@
   <p>
     <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-b5653a?style=flat-square"></a>
     <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776ab?style=flat-square&logo=python&logoColor=white">
-    <img alt="Windows" src="https://img.shields.io/badge/platform-Windows-0078d4?style=flat-square&logo=windows&logoColor=white">
+    <img alt="Windows, Linux and macOS" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4?style=flat-square">
     <a href="https://github.com/HaianCao/ClaudApter/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/HaianCao/ClaudApter/ci.yml?branch=main&style=flat-square&label=tests"></a>
     <a href="https://github.com/HaianCao/Protoverta"><img alt="Gateway: Protoverta" src="https://img.shields.io/badge/gateway-Protoverta-2f6f8f?style=flat-square"></a>
   </p>
@@ -51,6 +51,18 @@ claude-ca
 The first time, this opens the setup page in your browser (later, `claude-ca setup` opens it). Paste your provider's base URL and API key, choose the API it speaks, pick a model and select **Run Claude Code**. That is all: authentication, the connection mode, the model's context and output limits and retries are set up automatically.
 
 Windows supports native CLI executables and standard npm global or project installations. Custom batch-wrapper behavior is not supported; use an official CLI installation if the launcher cannot resolve it safely.
+
+### Linux and macOS
+
+In a terminal, run the installer directly from GitHub:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/HaianCao/ClaudApter/main/scripts/install.sh | bash
+```
+
+It needs Python 3.11+ with `venv` (on Debian/Ubuntu: `sudo apt install python3 python3-venv`; on macOS: `brew install python@3.13`), installs the official Claude Code CLI with its own installer only if it is missing, and puts `claude-ca` in `~/.local/bin` (added to your shell profile if needed). No `sudo` is used. Run the same command again to update; your providers and API keys are kept. Settings live in `~/.config/claudapter` and the model cache in `~/.cache/claudapter` (or under `$XDG_CONFIG_HOME` / `$XDG_CACHE_HOME`).
+
+Open a new terminal and run `claude-ca`; setup works as on Windows.
 
 ## Configure a provider
 
@@ -195,6 +207,14 @@ In PowerShell, run the uninstaller directly from GitHub:
 It removes the launcher and its wrapper PATH entries, not the official Claude Code CLI. Separate prompts let you reset adapter environment overrides and delete default provider settings, API keys and cache (type `DELETE`). Everything is kept unless you confirm its removal.
 
 Environment reset clears only `CLAUDE_CA_CONFIG`, `CLAUDE_CA_CACHE` and `CLAUDE_CA_ENV_FILE` at user/process scope. It does not delete custom-path files, provider key variables, or shared `ANTHROPIC_*`/`OPENAI_*` variables. Machine-wide settings are not changed. Open a new terminal afterward. To explicitly request reset without prompts, append `-ResetEnvironment -NonInteractive`; data deletion still requires interactive confirmation.
+
+On Linux and macOS:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/HaianCao/ClaudApter/main/scripts/uninstall.sh | bash
+```
+
+It removes `claude-ca`, its environments and the PATH lines the installer added, not the official Claude Code CLI. Provider settings, API keys and the cache are kept; add `--delete-data` (`… | bash -s -- --delete-data`) to delete them too. Custom paths set through environment variables are never deleted.
 
 ## Advanced gateway settings
 
