@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import os
+import sys
 import tempfile
 import time
 import urllib.error
@@ -196,6 +197,14 @@ class _CatalogDeadline(Deadline):
             self.parent.bind(sock)
 
 
+def _note_skipped(items):
+    """Tell the user when the provider's catalog had entries that were left out."""
+    skipped = getattr(items, "skipped", 0)
+    if skipped:
+        noun = "entry" if skipped == 1 else "entries"
+        print(f"Note: skipped {skipped} invalid {noun} in the provider's model list.", file=sys.stderr)
+
+
 def _gateway_models(config, provider, headers=None, budget=None, *, timeout=12):
     try:
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
@@ -206,6 +215,7 @@ def _gateway_models(config, provider, headers=None, budget=None, *, timeout=12):
             pagination="after_id" if provider.protocol == "messages" else "none",
             context_field=_GATEWAY_CONTEXT_FIELD,
             output_field=_GATEWAY_OUTPUT_FIELD,
+            invalid_entries="skip",
         )
         policy_file = provider.gateway_runtime.get("catalog_policy_file")
         if policy_file:
@@ -222,21 +232,13 @@ def _gateway_models(config, provider, headers=None, budget=None, *, timeout=12):
                 return _OPENER.open(request, timeout=min(timeout, active_budget.remaining()))
 
             request_headers = _headers(config, provider) if headers is None else headers
-            try:
-                items = fetch_catalog(provider.base_url, request_headers, policy, upstream_open=upstream_open)
-            except ValueError as exc:
-                # A provider may report limits in another shape; the strict
-                # parser then rejects the page. Limits are optional, so list
-                # the models without them rather than failing discovery.
-                if not policy_file and "token limits" in str(exc):
-                    items = fetch_catalog(
-                        provider.base_url, request_headers, replace(policy, context_field=None, output_field=None), upstream_open=upstream_open
-                    )
-                else:
-                    raise
+            # Skip mode lists every model with a valid ID; malformed optional
+            # metadata such as token limits is dropped, never guessed.
+            items = fetch_catalog(provider.base_url, request_headers, policy, upstream_open=upstream_open)
+            _note_skipped(items)
             return [item.as_dict() for item in items]
     except ImportError:
-        raise ClaudapterError("Gateway discovery requires the matching Protoverta preview.") from None
+        raise ClaudapterError("Gateway discovery needs the Protoverta component. Run the installer command again to repair it.") from None
     except (ValueError, OSError, TypeError):
         raise ClaudapterError("Gateway catalog failed validation or exceeded its resource budget.") from None
 

@@ -54,6 +54,8 @@ Windows supports native CLI executables and standard npm global or project insta
 
 ## Configure a provider
 
+<p align="center"><img src="docs/images/setup-page.png" width="820" alt="ClaudApter setup page with the OpenRouter preset selected"></p>
+
 In the setup page:
 
 1. Select **Add**. For **OpenRouter**, **NVIDIA NIM**, **TokenHarbor** or **AgentRouter**, pick it under *Start from a tested provider*; otherwise leave *Custom provider*.
@@ -65,6 +67,13 @@ In the setup page:
 The provider's name and ID come from its address; change them, the authentication or the connection mode under **Advanced: connection details** if you need to.
 
 ### How ClaudApter connects
+
+```mermaid
+flowchart LR
+    CLI["Claude Code"] -->|"Anthropic Messages"| GW["Protoverta gateway<br/>on 127.0.0.1"]
+    GW -->|"Responses, Chat Completions<br/>or Anthropic Messages"| P["Your provider"]
+    CLI -.->|"direct mode: Anthropic Messages only"| R["Local retry relay"] -.-> P
+```
 
 | | Local gateway (default) | Direct |
 |---|---|---|
