@@ -29,15 +29,7 @@ from .errors import ClaudapterError
 from .gateway_options import runtime_options, session_options, validate_gateway_limits
 from .harness import cross_protocol_environment
 from .mcp import environment_references, load_servers, session_arguments
-
-
-def _bypass_loopback_proxy(env: dict[str, str]) -> None:
-    entries = [
-        value.strip() for key in ("NO_PROXY", "no_proxy") for value in env.get(key, "").split(",") if value.strip()
-    ]
-    entries.extend(("127.0.0.1", "localhost", "::1"))
-    merged = ",".join({value.casefold(): value for value in entries}.values())
-    env.update(NO_PROXY=merged, no_proxy=merged)
+from .provider_url import bypass_loopback_proxy
 
 
 def session_model_limits(config: Config, provider: Provider, model: str, token=None) -> dict:
@@ -169,7 +161,7 @@ def build_invocation(
         env.pop(secret_var(provider.id), None)
         env["ANTHROPIC_BASE_URL"] = gateway_url
         env["ANTHROPIC_AUTH_TOKEN"] = gateway_token
-        _bypass_loopback_proxy(env)
+        bypass_loopback_proxy(env)
     else:
         env["ANTHROPIC_BASE_URL"] = relay_url or claude_base_url(provider.base_url)
         env["ANTHROPIC_AUTH_TOKEN" if provider.auth_mode == "bearer" else "ANTHROPIC_API_KEY"] = token

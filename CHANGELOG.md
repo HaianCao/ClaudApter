@@ -11,6 +11,9 @@ All notable changes to ClaudApter are listed here. The format follows
   token limits are dropped rather than retried without limits.
 - Error messages and setup hints no longer mention a "preview" core.
 - README: setup page screenshot and a connection diagram.
+- Base URL rules and the loopback proxy bypass live in one module shared
+  verbatim with the other launcher (checked for drift in CI). Invalid base
+  URLs now get a message naming the exact problem.
 - Type-checked with mypy in CI; the deadline transport keeps its own TLS
   context instead of reading a private `urllib` attribute.
 

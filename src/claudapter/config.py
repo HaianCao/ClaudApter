@@ -14,6 +14,7 @@ except ImportError:  # A broken install must still open the setup page.
     RetryPolicy = None  # type: ignore[assignment,misc]
 
 from .errors import ClaudapterError
+from .provider_url import normalize_base_url
 from .toml_text import toml_value
 
 
@@ -135,32 +136,10 @@ def secret_var(provider_id: str) -> str:
 
 def validate_base_url(value: str, protocol: str = "messages") -> str:
     _text(value, "base_url", required=True)
-    if any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in value):
-        raise ClaudapterError("Base URL must not contain whitespace or control characters.")
-    value = value.strip().rstrip("/")
     try:
-        parsed = urlsplit(value)
-        hostname = parsed.hostname
-        port = parsed.port
+        return normalize_base_url(value)
     except ValueError as exc:
-        raise ClaudapterError("Base URL has an invalid host or port.") from exc
-    local_http = parsed.scheme == "http" and hostname in {"127.0.0.1", "localhost", "::1"}
-    if (
-        re.search(r"\s", value)
-        or (parsed.scheme != "https" and not local_http)
-        or not hostname
-        or parsed.username is not None
-        or parsed.password is not None
-        or parsed.query
-        or parsed.fragment
-        or (port is not None and port < 1)
-    ):
-        raise ClaudapterError("Base URL must use HTTPS (or loopback HTTP) without credentials, query or fragment.")
-    if parsed.path.endswith(("/messages", "/responses", "/chat/completions")):
-        raise ClaudapterError(
-            "Enter the base URL, for example https://provider.example/v1, without the endpoint suffix."
-        )
-    return value
+        raise ClaudapterError(str(exc)) from None
 
 
 def claude_base_url(value: str) -> str:
