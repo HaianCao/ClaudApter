@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 from .agent_models import agent_environment
 from .command import command_prefix, foreground_child
@@ -247,7 +248,7 @@ def _gateway(config: Config, provider: Provider, model: str | None = None):
     try:
         upstream = Protocol(provider.protocol)
         base_url = claude_base_url(provider.base_url) + "/v1" if upstream == Protocol.MESSAGES else provider.base_url.rstrip("/")
-        options = {} if upstream == Protocol.MESSAGES else {"client_profile": "claude", "messages_usage_policy": "deferred"}
+        options: dict[str, Any] = {} if upstream == Protocol.MESSAGES else {"client_profile": "claude", "messages_usage_policy": "deferred"}
         if model is not None:
             from protoverta.model_snapshot import ModelSnapshot, SnapshotModel
 

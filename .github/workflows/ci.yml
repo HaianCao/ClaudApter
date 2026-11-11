@@ -42,6 +42,8 @@ jobs:
           if ($LASTEXITCODE) { throw 'Tests failed' }
           python -m ruff check src tests scripts
           if ($LASTEXITCODE) { throw 'Lint failed' }
+          python -m mypy
+          if ($LASTEXITCODE) { throw 'Type check failed' }
           python -m ruff format --check src tests scripts
           if ($LASTEXITCODE) { throw 'Formatting check failed' }
           python -m build --wheel

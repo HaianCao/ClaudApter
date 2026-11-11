@@ -18,7 +18,7 @@ from pathlib import Path
 from .config import Config, Provider, cache_path, claude_base_url
 from .credentials import get_token, validate_token
 from .errors import ClaudapterError
-from .http_deadline import Deadline, DeadlineHTTPHandler, DeadlineHTTPSHandler
+from .http_deadline import Deadline, DeadlineHTTPHandler, DeadlineHTTPSHandler, attach_deadline
 from .settings_store import SettingsGuard
 
 _UNSET = object()
@@ -88,7 +88,7 @@ def request_json(request: urllib.request.Request, timeout: float = 12, *, budget
             with Deadline(timeout) as owned:
                 return request_json(request, timeout, budget=owned)
         if request is not None:
-            request.adapter_deadline = budget
+            attach_deadline(request, budget)
         with _OPENER.open(request, timeout=budget.remaining()) as response:
             try:
                 declared_size = int(response.headers.get("Content-Length", "0"))
@@ -228,7 +228,7 @@ def _gateway_models(config, provider, headers=None, budget=None, *, timeout=12):
             active_budget.remaining()
 
             def upstream_open(request, *, timeout):
-                request.adapter_deadline = active_budget
+                attach_deadline(request, active_budget)
                 return _OPENER.open(request, timeout=min(timeout, active_budget.remaining()))
 
             request_headers = _headers(config, provider) if headers is None else headers

@@ -7,6 +7,7 @@ import threading
 import webbrowser
 from http import HTTPStatus
 from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 from .agent_models import validate_agent_models
@@ -38,8 +39,8 @@ from .web_security import local_request, token_matches
 _HTML = Path(__file__).with_name("web_template.html").read_text(encoding="utf-8")
 
 
-def public_config(config: Config) -> dict:
-    result = {
+def public_config(config: Config) -> dict[str, Any]:
+    result: dict[str, Any] = {
         "providers": [
             {
                 "id": p.id,
@@ -274,7 +275,7 @@ def serve(config: Config) -> int:
                 if urlsplit(self.path).path == "/api/models/refresh":
                     self._refresh(body)
                     return
-                self._notes = []
+                self._notes: list[str] = []
                 if urlsplit(self.path).path == "/api/provider":
                     # Network checks run before taking the settings lock.
                     body, self._notes = detect_connection(config, body)
@@ -299,7 +300,7 @@ def serve(config: Config) -> int:
                 identity = _identity(snapshot, provider, token=credential)
                 budget = Deadline(12)
                 refreshes.add(budget)
-            entries = []
+            entries: list[Any] = []
             try:
                 with budget:
                     models = fetch_models(snapshot, provider, cache_sink=entries.append, budget=budget, token=credential)
