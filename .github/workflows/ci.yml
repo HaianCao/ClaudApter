@@ -54,7 +54,7 @@ jobs:
           python -c "from protoverta.server import GatewayConfig; import dataclasses; assert {'retry_attempts','shared_admission_db','client_tool_search','provider_profiles'} <= {f.name for f in dataclasses.fields(GatewayConfig)}"
           if ($LASTEXITCODE) { throw 'Incompatible gateway runtime' }
           python scripts/check_test_report.py test-results.xml
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: claude-tests-${{ matrix.python-version }}

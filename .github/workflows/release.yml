@@ -41,7 +41,7 @@ jobs:
           python -m build
           python -m twine check dist/*
           cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: distributions
           path: dist/*
