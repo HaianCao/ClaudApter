@@ -175,3 +175,38 @@ def test_detect_connection_resolves_auto_and_switches_official_only_providers_to
         explicit,
         [],
     )
+
+
+def test_official_client_only_provider_gets_the_native_api_and_direct_mode():
+    # A user who picks another API for such a provider (AgentRouter) would
+    # otherwise stay on the gateway, which the provider rejects at run time.
+    opener, _ = provider({"bearer": OFFICIAL_ONLY, "api_key": OFFICIAL_ONLY}, OFFICIAL_ONLY)
+    body = {
+        "id": "agentrouter",
+        "base_url": "https://p.test/v1",
+        "protocol": "chat",
+        "auth_mode": "auto",
+        "execution_mode": "gateway",
+        "api_key": "k",
+    }
+    resolved, notes = detect_connection(
+        Config(), body, lambda *args, **kwargs: check_connection(*args, **kwargs, opener=opener)
+    )
+    assert (resolved["protocol"], resolved["execution_mode"]) == ("messages", "direct")
+    assert any("official CLIs" in note for note in notes) and "Anthropic Messages" in notes[-1]
+
+
+def test_a_website_at_the_address_is_not_taken_for_the_api():
+    page = b"<!doctype html>\n<html><head><title>Provider</title></head></html>"
+
+    class Page(io.BytesIO):
+        status = 200
+
+    def opener(request, timeout):
+        return Page(page)
+
+    result = check_connection(
+        "https://p.test/models", "https://p.test/responses", "k", protocol_label="Responses", opener=opener
+    )
+    assert result.auth_mode is None and result.endpoint_available is False and result.models_available is False
+    assert "web page" in result.notes[0] and "/v1" in result.notes[0]

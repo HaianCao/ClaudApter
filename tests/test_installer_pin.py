@@ -24,3 +24,20 @@ def test_remote_install_downloads_the_release_tag_of_this_version():
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     assert re.search(r"\$adapterVersion = '([^']+)'", installer).group(1) == project["version"]
     assert "archive/refs/tags/v$adapterVersion.zip" in installer
+
+
+def test_shell_installer_matches_the_windows_installer():
+    # Linux/macOS (install.sh) and Windows (install.ps1) install the same release.
+    windows = (ROOT / "scripts" / "install.ps1").read_text(encoding="utf-8")
+    shell = (ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
+
+    def ps(name):
+        return re.search(rf"\${name} = '([^']+)'", windows).group(1)
+
+    def sh(name):
+        return re.search(rf'^{name}="([^"]*)"$', shell, re.MULTILINE).group(1)
+
+    assert sh("ADAPTER_VERSION") == ps("adapterVersion")
+    assert sh("PROTOVERTA_VERSION") == ps("protovertaVersion")
+    assert sh("PROTOVERTA_SHA256") == ps("protovertaSha256")
+    assert "archive/refs/tags/v$ADAPTER_VERSION.tar.gz" in shell

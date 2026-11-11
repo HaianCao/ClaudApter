@@ -1,5 +1,5 @@
 param([switch]$SkipClaudeInstall, [switch]$NonInteractive, [switch]$WithGateway, [string]$ProtovertaWheel, [switch]$NoPathChanges, [string]$SourceBranch = 'main')
-$adapterVersion = '0.3.0'
+$adapterVersion = '0.3.1'
 $ErrorActionPreference = 'Stop'
 $sourceTempRoot = $null
 $wheelTempRoot = $null
