@@ -3,6 +3,16 @@
 All notable changes to ClaudApter are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+- A provider that accepts only the official Claude Code (AgentRouter) is now saved with
+  the Anthropic Messages API and Direct mode whatever API was chosen; before, choosing another
+  API left it on the local gateway and every request failed with
+  `401 unauthorized client detected`.
+- Setup no longer mistakes a provider's website for its API (an address
+  missing `/v1`): it says so instead of reporting the key as accepted.
+
 ## [0.3.0] - 2026-11-11
 
 Requires Protoverta 0.4.0; the installer pins and verifies its wheel.

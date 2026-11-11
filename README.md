@@ -176,8 +176,9 @@ Classes: `rate_limit`, `overloaded`, `server`, `network`, `stream_interrupted`, 
 |---|---|
 | "The provider rejected this API key" when saving | Paste the key again (without `Bearer `); check that it is active and has credit. |
 | "This provider only accepts its official CLIs" | Expected for AgentRouter: it runs Direct and has no readable model list; type the model ID. |
+| `401 Unauthorized: unauthorized client detected` when running | The provider (for example AgentRouter) accepts only the official Claude Code, which must reach it directly with the Anthropic Messages API. Open setup, edit the provider and save it again: setup now picks Anthropic Messages and Direct for such providers (or choose the AgentRouter preset). |
 | "No model list" / the model list is empty | Type the exact model ID from the provider's website. |
-| "This provider has no … endpoint at this address" | Check the base URL (it usually ends in `/v1`) and the API you chose. |
+| "This provider has no … endpoint at this address" or "answered with a web page" | Check the base URL (it usually ends in `/v1`) and the API you chose. |
 | Requests fail after a long wait | Open `%LOCALAPPDATA%\claudapter\retry.log` to see the provider's error for each attempt. |
 | "Protoverta component is missing or broken" | Run the installer command again; it repairs the installation and keeps your settings. |
 | Behind a company proxy | Set `HTTPS_PROXY` (and `NO_PROXY` for local addresses); the local gateway is reached directly. |

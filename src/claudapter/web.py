@@ -139,11 +139,19 @@ def detect_connection(config: Config, body: dict, probe=check_connection) -> tup
     result = probe(models_url, endpoint_url, token, protocol_label=_PROTOCOL_LABELS.get(protocol, protocol))
     if result.key_rejected:
         raise ClaudapterError(result.notes[-1])
+    notes = list(result.notes)
     if result.auth_mode:
         body["auth_mode"] = result.auth_mode
-    if result.official_client_only and protocol == "messages":
+    if result.official_client_only:
+        # Only Claude Code itself is accepted, so it must reach the provider
+        # directly, which works with the Anthropic Messages API alone.
+        if protocol != "messages":
+            body["protocol"] = "messages"
+            notes.append(
+                "Claude Code can reach this provider only with its own Anthropic Messages API, so the API was set to Anthropic Messages."
+            )
         body["execution_mode"] = "direct"
-    return body, list(result.notes)
+    return body, notes
 
 
 def serve(config: Config) -> int:

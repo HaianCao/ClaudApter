@@ -44,6 +44,11 @@ def _message(raw: bytes) -> str:
     return ""
 
 
+def _web_page(raw: bytes) -> bool:
+    """A website answering instead of the API (an address missing its API prefix)."""
+    return raw.lstrip()[:15].lower().startswith((b"<!doctype html", b"<html"))
+
+
 def friendly_http_error(status: int, raw: bytes = b"") -> str:
     """One actionable sentence for a provider's HTTP error on setup or model refresh."""
     message = _message(raw).lower()
@@ -87,6 +92,7 @@ def check_connection(
     """
     open_url = opener or urllib.request.build_opener(_NoRedirect).open
     result = ProbeResult()
+    web_page = False
 
     def request(method: str, url: str, headers: dict[str, str], body: bytes | None = None) -> tuple[int | None, bytes]:
         try:
@@ -112,8 +118,12 @@ def check_connection(
     def attempt(method: str, url: str, extra: dict[str, str], body: bytes | None) -> tuple[str | None, int | None, int]:
         """Bearer first, then x-api-key: (accepted style, last status, rejections)."""
         rejected, status = 0, None
+        nonlocal web_page
         for style in ("bearer", "api_key"):
             status, raw = request(method, url, {**_headers(style, token), **extra}, body)
+            if _web_page(raw):
+                web_page = True
+                return None, 404, rejected
             if status in (401, 403):
                 if official_only(raw):
                     return None, status, 0
@@ -143,7 +153,9 @@ def check_connection(
     if status in (404, 405):
         result.endpoint_available = False
         result.notes.append(
-            f"This provider has no {protocol_label} endpoint at this address. Check the base URL or choose another protocol."
+            f"This address answered with a web page, not the {protocol_label} API. Check the base URL; it usually ends with /v1."
+            if web_page
+            else f"This provider has no {protocol_label} endpoint at this address. Check the base URL or choose another protocol."
         )
     elif style is not None:
         result.endpoint_available, result.auth_mode = True, style
@@ -161,7 +173,9 @@ def check_connection(
             return result
         result.auth_mode = models_style
     else:
-        status, _ = request("GET", models_url, _headers(models_style, token))
+        status, raw = request("GET", models_url, _headers(models_style, token))
+        if _web_page(raw):
+            status = 404
     if status == 200:
         result.models_available = True
     elif status in (404, 405):
